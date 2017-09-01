@@ -22,8 +22,9 @@ augroup filetypedetect
     au BufNewFile,BufRead *.rest setfiletype rst
     au BufNewFile,BufRead *.td setfiletype tablegen
     au BufNewFile,BufRead bash-fc-* SetupBashFixcommand
-    au BufNewFile,BufRead svn-prop*.tmp setfiletype svn
     au BufNewFile,BufRead leinrc setfiletype sh
+    au BufNewFile,BufRead .pypirc setfiletype cfg
+    au BufNewFile,BufRead .coveragerc setfiletype cfg
 
     " Setup Git-related filetypes.
     au BufNewFile,BufRead *.git/MERGE_MSG setfiletype gitcommit
@@ -39,4 +40,15 @@ augroup filetypedetect
 
     " Setup tmux conf files.
     au BufNewFile,BufRead .tmux.conf*,tmux.conf* setf tmux
+
+    " Treat .syntastic_c_config as vim.
+    autocmd BufRead,BufNewFile .syntastic_c_config setfiletype vim
+
+    " Salt server support.  Treat .sls files as yaml, unless #!py is at the top.
+    autocmd BufRead,BufNewFile *.sls
+                \ if getline(1) =~ "^#!py" |
+                \   setfiletype python |
+                \ else |
+                \   setfiletype yaml |
+                \ endif
 augroup END

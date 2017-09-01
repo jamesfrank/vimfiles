@@ -1,7 +1,7 @@
 " textobj-function - Text objects for functions
-" Version: 0.1.3
-" Copyright (C) 2007-2013 Kana Natsuno <http://whileimautomaton.net/>
-" License: So-called MIT license  {{{
+" Version: 0.4.0
+" Copyright (C) 2007-2014 Kana Natsuno <http://whileimautomaton.net/>
+" License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
 "     "Software"), to deal in the Software without restriction, including
@@ -21,66 +21,25 @@
 "     TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 "     SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 " }}}
-if exists('g:loaded_textobj_function')  "{{{1
+
+if exists('g:loaded_textobj_function')
   finish
 endif
 
 
 
 
-
-
-
-
-" Interface  "{{{1
-
 call textobj#user#plugin('function', {
-\      '-': {
-\        '*sfile*': expand('<sfile>:p'),
-\        'select-a': 'af',  '*select-a-function*': 's:select_a',
-\        'select-i': 'if',  '*select-i-function*': 's:select_i'
-\      }
-\    })
+\   'a': {'select': 'af', 'select-function': 'textobj#function#select_a'},
+\   'i': {'select': 'if', 'select-function': 'textobj#function#select_i'},
+\   'A': {'select': 'aF', 'select-function': 'textobj#function#select_A'},
+\   'I': {'select': 'iF', 'select-function': 'textobj#function#select_I'},
+\ })
 
 
 
-
-
-
-
-
-" Misc.  "{{{1
-function! s:select(object_type)
-  return exists('b:textobj_function_select')
-  \      ? b:textobj_function_select(a:object_type)
-  \      : 0
-endfunction
-
-function! s:select_a()
-  return s:select('a')
-endfunction
-
-function! s:select_i()
-  return s:select('i')
-endfunction
-
-
-
-
-
-
-
-
-" Fin.  "{{{1
 
 let g:loaded_textobj_function = 1
-
-
-
-
-
-
-
 
 " __END__
 " vim: foldmethod=marker

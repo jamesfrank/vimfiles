@@ -8,7 +8,11 @@
     Setup vimfiles                                      |notes_setup_vimfiles|
     Build Vim                                           |notes_build_vim|
 3.  Plugins                                             |notes_plugins|
-    Align - Align things into columns                   |notes_align|
+    Ack - Search using 'ack' utility                    |notes_ack|
+    Ag - Search using 'ag' utility                      |notes_ag|
+    Airline - statusline utility in pure vimscript      |notes_airline|
+    Badwolf colorscheme                                 |notes_badwolf|
+    Base16 colorscheme collection                       |notes_base16|
     BufExplorer - Buffer switcher and manager           |notes_bufexplorer|
     BufMRU - Most-recently-used buffer switcher         |notes_bufmru|
     BufKill - Kill buffer without closing window        |notes_bufkill|
@@ -18,6 +22,8 @@
     ColorSamplerPack - Color schemes and theme menu     |notes_colorsamplerpack|
     CtrlP - Fuzzy matches for files, buffers, etc.      |notes_ctrlp|
     Dual - Dual color scheme (gvim, vim)                |notes_dual|
+    Easy-Align - Align text on delimiters               |notes_easyalign|
+    EasyMotion - Multiple new motions                   |notes_easymotion|
     Endwise - End certain structures automatically      |notes_endwise|
     Eunuch - helpers for UNIX                           |notes_eunuch|
     Extline - for extending lines                       |notes_extline|
@@ -28,10 +34,16 @@
     FSwitch - Filename switching (e.g., .c <=> .h)      |notes_fswitch|
     Fugitive - A wrapper for Git in Vim                 |notes_fugitive|
     Grep - Wrapper for grep/xargs                       |notes_grep|
+    Grepper - Extensible wrapper for grep-like tools    |notes_grepper|
+    Gruvbox - a dark colorscheme                        |notes_gruvbox|
     Gundo - Visualize your undo tree                    |notes_gundo|
     Headerguard - Add guards for header files           |notes_headerguard|
-    HiLinkTrace - Display syntax hilighting stack       |notes_hilinktrace|
+    Hemisu - A dark colorscheme                         |notes_hemisu|
+    HiLinkTrace - Display syntax highlighting stack     |notes_hilinktrace|
+    Hybrid - A dark colorscheme                         |notes_hybrid|
     Indent-guides - Adds indent guides                  |notes_indent-guides|
+    Incsearch - Incrementally highlight pattern matches |notes_incsearch|
+    Incsearch-fuzzy - incsearch with fuzzy patterns     |notes_incsearch-fuzzy|
     JavaComplete - Java Omnicompletion                  |notes_javacomplete|
     Keepcase - Search-and-replace keeping case          |notes_keepcase|
     Less - Syntax highlighting for LessCSS              |notes_less|
@@ -43,6 +55,8 @@
     Markdown - Markdown syntax support                  |notes_markdown|
     Matchit - Extended matching with '%'                |notes_matchit|
     Misc - Contains many useful Vimscript functions     |notes_misc|
+    Monokai - A dark colorscheme                        |notes_monokai|
+    Moonscript - support for a dialect of Lua           |notes_moonscript|
     Netrw - File reading and writing across networks    |notes_netrw|
     OmniCppComplete - C/C++ Omnicompletion              |notes_omnicppcomplete|
     Paredit - Structured editing of Lisp S-expressions  |notes_paredit|
@@ -51,14 +65,19 @@
     Project - Managing "projects" of files              |notes_project|
     Python - Python Syntax file with folding            |notes_python|
     PythonComplete - Python Omnicompletion              |notes_pythoncomplete|
+    Quickfix-reflector - edit QuickFix and save changes |notes_quickfix-reflector|
     Rainbow Parentheses - Highlight nested parens       |notes_rainbow-parens|
     Repeat - Repeat operations for supported plugins    |notes_repeat|
     Redl - Provides a debug REPL to Clojure             |notes_redl|
     RunView - Run lines through filter into buffer      |notes_runview|
+    Rust - Language support for Rust                    |notes_rust|
     Scriptease - Debugging tools for Vimscripts         |notes_scriptease|
     ScrollColor - Scroll through color schemes          |notes_scrollcolor|
     Selfdot - Changes "." to "self." in Python          |notes_selfdot|
     Session - Provides better session management        |notes_session|
+    Signature - Signs and helpers for bookmarks         |notes_signature|
+    Sneak - Motion based on two-character searching     |notes_sneak|
+    Snippets - Default snippets for UltiSnips           |notes_snippets|
     Surround - Manipulating "surroundings"              |notes_surround|
     Svn - View Subversion diffs while writing log       |notes_svn|
     SwapIt - Cycle through related words                |notes_swapit|
@@ -79,10 +98,13 @@
     VisIncr - Increment visually selected areas         |notes_visincr|
     VisSort - Sort visually selected areas              |notes_vissort|
     VisSwap - Swap visually selected areas              |notes_visswap|
+    Wombat256i - A dark colorscheme                     |notes_wombat256i|
 4.  Extensions                                          |notes_extensions|
     C Additions - Extra syntax highlighting for C       |notes_c_additions|
+    Python indentation support                          |notes_python_indent|
     Tmux syntax - Syntax definitions for tmux.conf      |notes_tmux_syntax|
 5.  Customizations                                      |notes_customizations|
+    Quickfix keys                                       |notes_quickfix_keys|
 6.  Tips                                                |notes_tips|
 
 
@@ -97,6 +119,11 @@ See |notes_setup_vimfiles| for instructions on setting up vimfiles.  It may be
 desirable to compile Vim on Unix platforms in order to turn on additional
 support features (particularly Ruby, for example).  See |notes_build_vim| for
 instructions on building Vim.
+
+Locally added extensions (which typically live in ~/.vim/local) may have notes
+as well; you can look at them via: >
+
+  :help localnotes
 
 ------------------------------------------------------------------------------
 Changes                                                 *notes_changes*
@@ -219,11 +246,17 @@ or, for more automation: >
 
 Prerequisites for Fedora: >
     sudo yum install -y ruby ruby-devel perl-ExtUtils-Embed python-devel
-    sudo yum install -y gtk+-devel gtk2-devel gpm gpm-devel
+    sudo yum install -y gtk+-devel gtk2-devel gpm gpm-devel ncurses-devel
 or, for more automation: >
     sudo yum-builddep -y vim-X11
 
-(Note: this fix is obsolete in modern Vim.)
+    # On Fedora 22+, use this instead (since ``yum`` has been retired):
+    sudo dnf builddep -y vim-X11
+Also required on Fedora 23+ are RPM-related build tools now that libraries are
+hardened by default: >
+    sudo dnf install -y rpm-build redhat-rpm-config
+
+(Note: the below fix is obsolete in modern Vim.)
 On 64-bit Linux, Python libraries live in /usr/lib64/pythonx.y,
 and Vim's configuration script doesn't find the config directory.
 One fix appears to be the following symlink: >
@@ -237,20 +270,44 @@ The detailed steps for download and building Vim are captured in
 the script ~/.vim/buildtool.  Run the script with no arguments for usage
 help, or read the script for more detailed information.
 
-Update the hg directory (in the default download location) with the latest Vim
+Update the git directory (in the default download location) with the latest Vim
 source: >
 
-  # From any directory; updates clone in <download>/vim/7.3/hg:
-  ~/.vim/buildtool 7.3 update
+  # From any directory; updates clone in <download>/vim/8.0/git:
+  ~/.vim/buildtool 8.0 update
+
+On Fedora 23+, use the below options to setup some environment variables for
+building "hardened" binaries.  This is needed (at least through vim-8.0.0133)
+when compiling with --enable-rubyinterp and using Fedora-supplied ruby
+libraries.  Vim's configure script asks the ruby interpreter what LDFLAGS to use
+without also asking about CFLAGS; this leads to mismatched values of certain
+"hardened" settings that are now the default in all RPM builds.  The
+%configure macro in RPM SPEC files sets up both CFLAGS and LDFLAGS to their
+%hardened values, which is why Vim's configure script works when building an
+%RPM, but these settings must be applied manually when not building an RPM: >
+
+  # Evaluate variable definitions found in the %configure macro definition:
+  eval $(rpmbuild --eval '%{configure}' | egrep '^\s*[A-Z]+=')
+
+  # You may optionally display these variables if you are curious via:
+  rpmbuild --eval '%{configure}' | egrep '^\s*[A-Z]+='
+
+  # These are sample variable definitions that will be set by the above
+  # $(eval) statement:
+  CFLAGS="${CFLAGS:--O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic}" ; export CFLAGS ;
+  CXXFLAGS="${CXXFLAGS:--O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic}" ; export CXXFLAGS ;
+  FFLAGS="${FFLAGS:--O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -I/usr/lib64/gfortran/modules}" ; export FFLAGS ;
+  FCFLAGS="${FCFLAGS:--O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -m64 -mtune=generic -I/usr/lib64/gfortran/modules}" ; export FCFLAGS ;
+  LDFLAGS="${LDFLAGS:--Wl,-z,relro -specs=/usr/lib/rpm/redhat/redhat-hardened-ld}"; export LDFLAGS;
 
 Unpack, configure, build, and create binary and source tarballs: >
 
   cd ~/build
-  rm -rf vim-7.3
-  ~/.vim/buildtool 7.3
+  rm -rf vim-8.0
+  ~/.vim/buildtool 8.0
 
 Installation of final tarball is done as follows: >
-    sudo tar -C / -zxf vim-7.3/vim-7.3.patchlevel.i386.tar.gz
+    sudo tar -C / -zxf vim-8.0/vim-8.0.patchlevel.x86_64.tar.gz
 
 After installation on Linux, the distro-provided global vimrc file will not be
 used, so Vim will come up in VI-compatible mode for users (e.g. root) that
@@ -263,6 +320,15 @@ On Fedora: >
 
 On Ubuntu: >
     ln -s /etc/vim/vimrc /usr/local/share/vim/vimrc
+    cp /usr/share/vim/vim80/debian.vim /usr/local/share/vim/vim80/debian.vim
+<
+  Change the above source `vim80` directory to whatever you have on your system,
+  and change the destination `vim80` directory to match the version of Vim you
+  are installing.
+
+  The debian.vim file is important on Ubuntu systems; without that, nothing sets
+  'nocompatible' before executing `syntax on` in /etc/vim/vimrc which can lead
+  to issues when ~/.vim/filetype.vim is read.
 
 To register as the system alternative: >
 
@@ -291,12 +357,12 @@ On Linux, ensure the following fonts are available:
 Sources
 -------
 
-Vim source lives in a mercurial repository as described here:
+Vim source lives in a git repository as described here:
   http://www.vim.org/download.php
 
 Clone the repository via: >
   cd ~/build
-  hg clone https://vim.googlecode.com/hg/ vim
+  git clone https://github.com/vim/vim.git
 
 Windows build notes:
 --------------------
@@ -468,29 +534,89 @@ General bundle installation instructions:               *bundle_installation*
 Installed plugins:
 
 ------------------------------------------------------------------------------
-ALIGN                                                   *notes_align*
-    Align things into columns                           |align|
+ACK                                                     *notes_ack*
+  Search using 'ack' utility                            |ack|
 
-Align vimball comprises AlignPlugin and AlignMapsPlugin with a combined
-version number.
+Note that the regular expressions used in invocations of :Ack must be
+quoted using the shell-specific rules of your environment.  See |:G|
+for more details.
 
-Version 36e_46h from section "Alignment" at
-http://mysite.verizon.net/astronaut/vim/index.html
+Local customizations:
+- The single-file implementation of "ack" is installed in $VIMFILES/tool/ack,
+  ensuring that it is available on all platforms with Perl installed.
+
+For more information on "ack", see http://beyondgrep.com/.
+
+Version 2014-06-11 (303bcef) from:
+https://github.com/mileszs/ack.vim.git
 
 Installation:
-- Distributed as a |vimball|  >
+- Follow bundle installation instructions (|bundle_installation|).
 
-    vim .VimballRecord Align-36e_46h.vba.gz
-    :RmVimball Align-xxx_yyy
-    :n
-    :so %
-    :q
+------------------------------------------------------------------------------
+AG                                                      *notes_ag*
+  Search using 'ag' utility                             |ag|
+
+Note that the regular expressions used in invocations of :Ag must be
+quoted using the shell-specific rules of your environment.  See |:G|
+for more details.
+
+To use this plugin, ensure that the "Silver Searcher" ('ag') utility is
+installed.  See https://github.com/ggreer/the_silver_searcher for details.
+
+Version 2014-07-07 (d3a00f8) from:
+https://github.com/rking/ag.vim.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+
+------------------------------------------------------------------------------
+AIRLINE                                                 *notes_airline*
+  Statusline utility in pure vimscript                  |airline.txt|
+
+Version 2017-05-08 (466198a) from:
+https://github.com/vim-airline/vim-airline
+
+Themes version 2017-05-24 (43fe392) from:
+https://github.com/vim-airline/vim-airline-themes
+
+Local Customizations:
+- Added an AirlineCustomizeSymbols command to customize separators and symbols
+  based on whether g:FontFamily supports Powerline symbols or not.
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+BADWOLF                                                 *notes_badwolf*
+  A dark colorscheme
+
+Version 2013-07-19 (e6fdf18) from:
+https://github.com/sjl/badwolf.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+BASE16                                                  *notes_base16*
+  A colorscheme collection
+
+Version 2014-07-22 (1ce4b84) from:
+https://github.com/chriskempson/base16-vim.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 BUFEXPLORER                                             *notes_bufexplorer*
   Buffer switcher and manager                           |bufexplorer|
 
-Version 7.4.2 from http://www.vim.org/scripts/script.php?script_id=42
+Version 2016-04-27 (937eb53) from:
+https://github.com/jlanzarotta/bufexplorer
+
+Note: The releases at http://www.vim.org/scripts/script.php?script_id=42 don't
+appear to be kept as up-to-date as on Github.
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -503,30 +629,76 @@ BUFMRU                                                  *notes_bufmru*
 
 Usage:
   KEY(S)            ACTION
-  <Space>           switch to the most recently used buffer and enter BufMRU
-                    mode.
+  <C-6>             Switch to the most recently used buffer and enter BufMRU
+                    mode;  This is the same as Vim's CTRL-^ / CTRL-6 shortcut
+                    key for the most-recently-used buffer
+  <Space><Space>    Switch to MRU buffer and enter BufMRU mode.  This is easier
+                    to invoke and closer to the original single-<Space> mapping
+                    to aid muscle memory.
 
   in BufMRU MODE:
-  f  b              reach more MRU buffers (forward/backward)
-  <Enter>           accept current choice
-  q                 quit the mode, go back to start buffer (forcibly)
+  f  b              Reach more MRU buffers (forward/backward)
+  <Enter>           Accept current choice
+  q                 Quit the mode, go back to start buffer (forcibly)
 
-  The mode times out after 'timeoutlen' ms.  A key not mapped in the mode
-  (e.g. <Space>) quits the mode and executes as usual.
+  The mode times out after 'timeoutlen' ms.  A key not mapped in the mode quits
+  the mode and executes as usual, so for example pressing CTRL-6 again will
+  cancel the current BufMRU mode, toggle back to the original buffer and
+  re-launch BufMRU mode again.
 
 Note: All unneeded keys are unmapped in BufMRU mode to avoid collisions with
 console-mode Vim's Arrow keys (and other sequences that start with <Escape>).
 This maximizes buffer switching speed without needing to press the
 often-redundant <Enter> to exit BufMRU mode.
 
-Version 3.3 from http://www.vim.org/scripts/script.php?script_id=2346
+Version 3.3 from:
+http://www.vim.org/scripts/script.php?script_id=2346
 
 Installation:
 - Copy into ~/.vim/plugin/
 
+This includes the following patch to make prettier status output and to
+make it easier to unmap the undesired keys: >
+
+  diff --git a/plugin/bufmru.vim b/plugin/bufmru.vim
+  index 9b15b94..35f5351 100644
+  --- a/plugin/bufmru.vim
+  +++ b/plugin/bufmru.vim
+  @@ -134,18 +134,18 @@ augroup bufmru
+       au BufRead * let s:did_bufread = 1
+   augroup End "}}}
+   " Mappings: {{{1
+  -exec "nmap" g:bufmru_switchkey "<SID>idxz<SID>buf<SID>m_"
+  -nmap <SID>m_f	    <SID>next<SID>buf<SID>m_
+  -nmap <SID>m_b	    <SID>prev<SID>buf<SID>m_
+  -sil! unmap	    <SID>m_<Tab>
+  -sil! unmap	    <SID>m_<S-Tab>
+  -nmap <SID>m_!	    <SID>bang<SID>m_
+  -nmap <SID>m_<Enter> <SID>raccept
+  -nmap <SID>m_e	    <SID>raccept
+  -nmap <SID>m_<Esc>   <SID>reset
+  -nmap <SID>m_q	    <SID>reset
+  -nmap <SID>m_	    <SID>raccept
+  -nmap <SID>m_y	    <SID>yank<SID>m_
+  +exec "nmap" g:bufmru_switchkey "<SID>idxz<SID>buf<Plug>bufmru...."
+  +nmap <Plug>bufmru....f	    <SID>next<SID>buf<Plug>bufmru....
+  +nmap <Plug>bufmru....b	    <SID>prev<SID>buf<Plug>bufmru....
+  +sil! unmap	    <Plug>bufmru....<Tab>
+  +sil! unmap	    <Plug>bufmru....<S-Tab>
+  +nmap <Plug>bufmru....!	    <SID>bang<Plug>bufmru....
+  +nmap <Plug>bufmru....<Enter> <SID>raccept
+  +nmap <Plug>bufmru....e	    <SID>raccept
+  +nmap <Plug>bufmru....<Esc>   <SID>reset
+  +nmap <Plug>bufmru....q	    <SID>reset
+  +nmap <Plug>bufmru....	    <SID>raccept
+  +nmap <Plug>bufmru....y	    <SID>yank<Plug>bufmru....
+
+   nnoremap <silent> <SID>idxz	:<C-U>call<sid>idxz()<cr>
+   nnoremap <silent> <SID>next	:call<sid>next()<cr>
+
 ------------------------------------------------------------------------------
 BUFKILL                                                 *notes_bufkill*
-  BufKill - Kill buffer without closing window
+  BufKill - Kill buffer without closing window          |bufkill|
 
 Usage:
 
@@ -540,7 +712,8 @@ See also:
 :bd       - delete a buffer, closing window (vim built-in)    |:bdelete|
 :bw       - wipe a buffer, closing window (vim built-in)      |:buwipe|
 
-Version 1.11 from http://vim.sourceforge.net/scripts/script.php?script_id=1147
+Version 2015-09-24 (ba8b570) from:
+https://github.com/qpkorr/vim-bufkill.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -552,7 +725,8 @@ CHARACTERIZE                                             *notes_characterize*
 Replaces the builtin 'ga' with one that shows more information, including
 Unicode character name, Vim digraph, Emoji code, and HTML entity.
 
-Version 2013-03-13 (d5ba608) from git://github.com/tpope/vim-characterize.git
+Version 2013-03-13 (d5ba608) from:
+https://github.com/tpope/vim-characterize.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -564,7 +738,8 @@ CLOJURE-STATIC                                          *notes_clojure-static*
 Syntax, indent, filetype, and other miscellaneous support for editing Clojure
 without having a runtime environment.
 
-Version 2013-04-26 (949adf7) from git://github.com/guns/vim-clojure-static.git
+Version 2014-02-13 (3910ac4) from:
+https://github.com/guns/vim-clojure-static.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -574,7 +749,8 @@ CLOSETAG                                                *notes_closetag*
   Close XML and HTML tags automatically
 
 
-Version 0.9.1 from http://www.vim.org/scripts/script.php?script_id=13
+Version 0.9.1 from:
+http://www.vim.org/scripts/script.php?script_id=13
 
 Installation:
 - Install as ~/.vim/scripts/closetag.vim
@@ -585,7 +761,8 @@ Installation:
 COLORSAMPLERPACK                                        *notes_colorsamplerpack*
   Color schemes and theme menu
 
-Version 2012.10.28 from http://www.vim.org/scripts/script.php?script_id=625
+Version 2012.10.28 from:
+http://www.vim.org/scripts/script.php?script_id=625
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -604,61 +781,93 @@ Local customizations:
 
 - Normal-mode mappings:
 
-    CTRL-P CTRL-B        CtrlPBookmarkDir
-    CTRL-P c             CtrlPChange
-    CTRL-P C             CtrlPChangeAll
-    CTRL-P CTRL-D        CtrlPDir
-    CTRL-P CTRL-F        CtrlP %:h
-    CTRL-P CTRL-L        CtrlPLine
-    CTRL-P CTRL-M        CtrlPMRU
-    CTRL-P m             CtrlPMixed
-    CTRL-P CTRL-O        CtrlPBuffer    ; Mnemonic: buffers are "Open" files.
-    CTRL-P CTRL-P        CtrlP          ; From current working directory.
-    CTRL-P CTRL-Q        CtrlPQuickfix
-    CTRL-P CTRL-R        CtrlPRoot      ; From nearest enclosing project root.
-    CTRL-P CTRL-T        CtrlPTag
-    CTRL-P t             CtrlPBufTag
-    CTRL-P T             CtrlPBufTagAll
-    CTRL-P CTRL-U        CtrlPUndo
+    CTRL-p CTRL-b        CtrlPBookmarkDir
+    CTRL-p c             CtrlPChange
+    CTRL-p C             CtrlPChangeAll
+    CTRL-p CTRL-d        CtrlPDir
+    CTRL-p CTRL-f        CtrlP %:h
+    CTRL-p CTRL-l        CtrlPLine
+    CTRL-p CTRL-m        CtrlPMRU
+    CTRL-p m             CtrlPMixed
+    CTRL-p CTRL-o        CtrlPBuffer    ; Mnemonic: buffers are "Open" files.
+    CTRL-p CTRL-p        CtrlP          ; From current working directory.
+    CTRL-p CTRL-q        CtrlPQuickfix
+    CTRL-p CTRL-r        CtrlPRoot      ; From nearest enclosing project root.
+    CTRL-p CTRL-t        CtrlPTag
+    CTRL-p t             CtrlPBufTag
+    CTRL-p T             CtrlPBufTagAll
+    CTRL-p CTRL-u        CtrlPUndo
 
-- When CtrlP is active, the pair CTRL-N/CTRL-P moves the cursor vertically to
-  make a select, and CTRL-J/CTRL-K move through the command prompt history.
+- When CtrlP is active, the pair CTRL-n/CTRL-p moves the cursor vertically to
+  make a select, and CTRL-j/CTRL-k move through the command prompt history.
 
-  This is for consistency with other plugins that use CTRL-N/CTRL-P for moving
+  This is for consistency with other plugins that use CTRL-n/CTRL-p for moving
   around, and to avoid binding a commonly used function to the tmux prefix key
-  (CTRL-J).
+  (CTRL-j).
 
+Version 2016-01-17 (7f74368) from:
+https://github.com/ctrlpvim/ctrlp.vim.git
 
-Version 2013-07-29 (b5d3fe66a) from https://github.com/kien/ctrlp.vim
+(Note: kien, the original author, seems to have dropped off the grid as of
+mid-2013, so his repository is no longer being maintained at
+https://github.com/kien/ctrlp.vim; instead, the above fork has been started to
+continue maintenance.)
 
 Installation:
-- Follow bundle installation instructions (|bundle_installation|), with one
-  exception.  You need to apply the following patch to allow centering of
-  the selected tag: >
-
-  diff --git a/autoload/ctrlp/tag.vim b/autoload/ctrlp/tag.vim
-  index 626363a..5c89aad 100644
-  --- a/autoload/ctrlp/tag.vim
-  +++ b/autoload/ctrlp/tag.vim
-  @@ -121,6 +121,7 @@ fu! ctrlp#tag#accept(mode, str)
-                  en
-                  cal feedkeys(":".cmd." ".tg."\r".ext, 'nt')
-          en
-  +       cal feedkeys("zz", 'nt')
-          cal ctrlp#setlcdir()
-   endf
+- Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 DUAL                                                    *notes_dual*
   Dual color scheme (gvim, vim)                         |notes_dual|
 
-Version 1.1 from http://www.vim.org/scripts/script.php?script_id=2688
+Version 1.1 from:
+http://www.vim.org/scripts/script.php?script_id=2688
 
 Installation:
 - Copy to ~/.vim/colors/dual.vim
 
 Use: >
     :colorscheme dual
+
+------------------------------------------------------------------------------
+EASY-ALIGN                                              *notes_easyalign*
+  Align text on delimiters                              |easyalign|
+
+Local Customizations:
+- Map \a to launch Easy-Align in normal and visual modes.
+- Add custom alignment delimiters:
+
+  Delimiter   Purpose
+      \       Align on backslash (such as for C/C++ line continuations).
+
+Version 2014-11-22 (44216b0) from:
+https://github.com/junegunn/vim-easy-align
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+EASYMOTION                                              *notes_easymotion*
+  Multiple new motions                                  |easymotion|
+
+Local Customizations:
+- Use custom mappings only.
+- Set g:EasyMotion_smartcase so lowercase keys will match both cases.
+- Setup g:EasyMotion_keys for convenient keys.
+
+- Setup mappings:
+
+  <Space>jj          <Plug>(easymotion-s)
+  <Space>jJ          <Plug>(easymotion-s2)
+  <Space>jl          <Plug>(easymotion-sol-bd-jk)
+
+- Setup regular expressions for "anywhere" operations.
+
+Version 2016-02-15 (649120e) from:
+https://github.com/Lokaltog/vim-easymotion.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 ENDWISE                                                 *notes_endwise*
@@ -670,11 +879,11 @@ Vimscript, this amounts to appropriately adding endfunction, endif, etc.
 There's also Bourne shell, VB (don't ask), C/C++ preprocessor, and Lua
 support.
 
-This plugin does remap <CR> in insert mode.  It also adds a <C-X><CR> mapping
-to force inserting an end.  However, it the forced version isn't always
-correct.
+This plugin does remap <CR> in insert mode.  It also adds a <C-x><CR> mapping to
+force inserting an end.  However, the forced version isn't always correct.
 
-Version 2013-01-01 (fd869a75) from https://github.com/tpope/vim-endwise
+Version 2014-10-01 (96eb117) from:
+https://github.com/tpope/vim-endwise
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -694,7 +903,8 @@ Vim sugar for the UNIX shell commands that need it the most. Commands include:
   :SudoWrite  Write a privileged file with sudo.
   :W          Write every open window. Handy for kicking off tools like guard.
 
-Version 2013-03-02 (6a4d1933) from https://github.com/tpope/vim-eunuch
+Version 2014-06-23 (c856e5d6) from:
+https://github.com/tpope/vim-eunuch
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -703,7 +913,8 @@ Installation:
 EXTLINE                                                 *notes_extline*
   Extend lines (e.g., for underlined titles)            |extline.txt|
 
-Version 0.2.0 (704ec96) from https://github.com/drmikehenry/vim-extline
+Version 0.2.0 (704ec96) from:
+https://github.com/drmikehenry/vim-extline
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -715,7 +926,8 @@ FIREPLACE                                               *notes_fireplace*
 Provides an enhanced environment for editing Clojure code (including
 completion support), if you're connected via nREPL.
 
-Version 2013-04-19 (4f6b8e5) from git://github.com/tpope/vim-fireplace.git
+Version 2014-02-08 (54476927) from:
+https://github.com/tpope/vim-fireplace.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -724,7 +936,8 @@ Installation:
 FIXKEY                                                  *notes_fixkey*
   Fix key code for console Vim                          |fixkey.txt|
 
-Version 0.3.2 (756cdf8) from https://github.com/drmikehenry/vim-fixkey
+Version 0.3.8 (ce59fe8) from:
+https://github.com/drmikehenry/vim-fixkey
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -735,7 +948,8 @@ See |fixkey.txt| for details on setting up your terminal.
 FONTDETECT                                              *notes_fontdetect*
   Detect installed fonts                                |fontdetect.txt|
 
-Version 0.2.2 (9770b2c) from https://github.com/drmikehenry/vim-fontdetect
+Version 0.2.2 (9770b2c) from:
+https://github.com/drmikehenry/vim-fontdetect
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -744,16 +958,23 @@ Installation:
 FONTSIZE                                                *notes_fontsize*
   Fontsize - increment/decrement font size              |fontsize.txt|
 
-  <Leader><Leader>+    Increment font size
-  <Leader><Leader>=    Increment font size
-  <Leader><Leader>-    Decrement font size
-  <Leader><Leader>0    Reset to default font size
+  <Leader><Leader>=    Begin "font size" mode
+  <Leader><Leader>+    Increment font size (by [count])
+  <Leader><Leader>-    Decrement font size (by [count])
+  <Leader><Leader>0    Revert to default font size
 
-The above mappings initiate a "font size" mode in which the following
+Note that by default, <Leader> is the backslash character, so for example
+<Leader><Leader>+ is invoked by pressing \\+ from normal mode.
+
+Prefix the above mappings with a numeric [count] to change the font size by
+larger increments.  For example, increase the font size by 5 points via:
+
+  5<Leader><Leader>+
+
+The above mappings also initiate a "font size" mode in which the following
 additional individual keys become active:
 
-  +          Increment font size
-  =          Increment font size
+  +          Increment font size (may also use = to avoid shift key)
   -          Decrement font size
   0          Revert to default font size
   !          Save current size as new default
@@ -761,14 +982,19 @@ additional individual keys become active:
   <SPACE>    Quit "font size" mode
   <CR>       Quit "font size" mode
 
-Other keys pressed will exit "font size" mode and perform their normal
-function.
+Other keys pressed will exit "font size" mode and then perform their normal
+function (e.g., pressing "j" will cancel "font size" mode and move down one
+line).
 
 In addition, "font size" mode will automatically timeout after |timeoutlen|
 milliseconds have elapsed without a keypress, because "font size" mode is
 based on mappings.
 
-Version 0.3.1 (cb05538) from https://github.com/drmikehenry/vim-fontsize
+While "font size" mode is active, the prompt "(fontsize)" will be shown if
+'showcmd' is set.
+
+Version 0.4.1 (2f1af78) from:
+https://github.com/drmikehenry/vim-fontsize
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -798,16 +1024,12 @@ Compatibility command for Alternate.vim:
 
   :A        Same as :FSHere
 
-Version 0.9.2 from http://www.vim.org/scripts/script.php?script_id=2590
+Version 0.9.5 (e716da1) from:
+https://github.com/derekwyatt/vim-fswitch
 
 Installation:
 
-- Distributed as a |vimball|  >
-
-    vim FSwitch-0.9.2.vba.gz
-    :RmVimball FSwitch          (if upgrading)
-    :so %
-    :q
+- Follow bundle installation instructions (bundle_installation).
 
 ------------------------------------------------------------------------------
 FUGITIVE                                                *notes_fugitive*
@@ -823,7 +1045,8 @@ more useful ones are:
             See |fugitive-:Gstatus| for more information
   :Git      Run an arbitrary git command from within Vim
 
-Version 2013-10-24 (34e2d253) from git://github.com/tpope/vim-fugitive.git
+Version 2016-05-11 (3439f99) from:
+https://github.com/tpope/vim-fugitive.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -900,18 +1123,35 @@ Local customizations
   by pressing <F3>.
 
 Installation:
-- Install grep.vim in ~/.vim/plugin
-- Install grep.txt in ~/.vim/doc
-- :helptags ~/.vim/doc
+- Follow bundle installation instructions (|bundle_installation|).
 - Note: grep.txt is not directly downloadable; it was created from a
-  copy-and-paste of the plugin web page
+  copy-and-paste of the plugin web page.
 
-- For Version 1.8: the xargs command is using --null.  OS X's version
-  of xargs doesn't support this long alias for -0, so replace --null
-  with -0 in grep.vim.  In Version 1.9, the new variable Grep_Xargs_Options
-  was added to fix this problem.
+Version 1.11 from:
+http://www.vim.org/scripts/script.php?script_id=311
 
-Version 1.9 from http://www.vim.org/scripts/script.php?script_id=311
+------------------------------------------------------------------------------
+GREPPER                                                 *notes_grepper*
+  Extensible wrapper for grep-like tools                |grepper|
+
+Original version:
+https://github.com/mhinz/vim-grepper
+
+Using version 2016-11-11 of branch "patched" from:
+https://github.com/drmikehenry/vim-grepper
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+GRUVBOX                                                 *notes_gruvbox*
+  A dark colorscheme
+
+Version 2014-08-22 (d1a55f7) from:
+https://github.com/cmorhetz/gruvbox
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 GUNDO                                                   *notes_gundo*
@@ -921,7 +1161,8 @@ Gundo is a Vim plugin for visualizing your undo tree to make it usable.
 
 To toggle the undo view, use :GundoToggle.
 
-Version 2.4.0 from http://www.vim.org/scripts/script.php?script_id=3304
+Version 2.4.0 from:
+http://www.vim.org/scripts/script.php?script_id=3304
 
 - Unzipped into ~/.vim/bundle.
 - :Helptags
@@ -934,16 +1175,27 @@ To add or update a header guard in a .h file: >
 
     :HeaderguardAdd
 
-Version 0.2.1 (2c254b7) from https://github.com/drmikehenry/vim-headerguard
+Version 0.2.2 (e53b37fa) from:
+https://github.com/drmikehenry/vim-headerguard
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+HEMISU                                                  *notes_hemisu*
+  A dark colorscheme
+
+Version 2013-09-05 (37ea6aa) from:
+https://github.com/noahfrederick/vim-hemisu.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 HILINKTRACE                                             *notes_hilinktrace*
-  Display syntax hilighting stack                       |hilinks|
+  Display syntax highlighting stack                     |hilinks|
 
-To toggle automatic display of syntax hilighting stack: >
+To toggle automatic display of syntax highlighting stack: >
 
     :HLT!
 
@@ -955,8 +1207,53 @@ Local Customizations:
 
 - Disable mappings for <S-F10> and <Leader>hlt.
 
-Version 4l (lowercase "L") from
+Version 4l (lowercase "L") from:
 http://www.drchip.org/astronaut/vim/index.html#HILINKS
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+HYBRID                                                  *notes_hybrid*
+  A dark colorscheme
+
+Version 2014-05-10 (81b7e55) from:
+https://github.com/w0ng/vim-hybrid.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+INCSEARCH                                                *notes_incsearch*
+  Incrementally highlight pattern matches                |incsearch.txt|
+
+Version 2016-05-06 (161c5b6) from:
+https://github.com/haya14busa/incsearch.vim.git
+
+Local Customizations:
+- The recommended mappings for "/", "?", and "g/" were made; see
+  |incsearch| for more details.
+
+Useful keys during "/" operation:
+
+  <Tab>/<S-Tab>   move to next/previous match on screen
+  <C-j>/<C-k>     move to next/previous page of matches on screen
+  <C-l>           start buffer text completion; use <Right>/<Left> to
+                  scroll through options while completing
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+INCSEARCH-FUZZY                                          *notes_incsearch-fuzzy*
+  Incsearch with fuzzy patterns
+
+Version 2016-01-06 (c0e5846) from:
+https://github.com/haya14busa/incsearch-fuzzy.vim.git
+
+Local Customizations:
+- The recommended mappings for "z/", "z?", and "zg/" were made; see
+  incsearch-fuzzy's README for more details.
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -982,8 +1279,8 @@ Local Customizations:
 - If your colorscheme has IndentGuidesOdd and IndentGuidesEven setup, then use
   those colors instead of letting the plugin automatically chose the colors.
 
-Version 2013-06-23 (eec1b629) from
-git://github.com/nathanaelkane/vim-indent-guides.git
+Version 2013-06-23 (eec1b629) from:
+https://github.com/nathanaelkane/vim-indent-guides.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -992,7 +1289,7 @@ Installation:
 JAVACOMPLETE                                           *notes_javacomplete*
   Java Omnicompletion
 
-Version 0.77.1.2 from
+Version 0.77.1.2 from:
 http://vim.sourceforge.net/scripts/script.php?script_id=1785
 
 Installation:
@@ -1065,13 +1362,15 @@ KeepCaseSameLen(original_word, new_word)
 Installation:
 - Install keepcase.vim in ~/.vim/plugin
 
-Version 2.0 from http://www.vim.org/scripts/script.php?script_id=6
+Version 2.0 from:
+http://www.vim.org/scripts/script.php?script_id=6
 
 ------------------------------------------------------------------------------
 LESS                                                    *notes_less*
   Syntax highlighting for LessCSS
 
-Version 2012-10-01 (0223dcdf) from https://github.com/groenewege/vim-less
+Version 2012-10-01 (0223dcdf) from:
+https://github.com/groenewege/vim-less
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1101,7 +1400,8 @@ might contain: >
 To re-use a group of settings, create a function (say, in the global vimrc
 file), then call it from the .lvimrc files.
 
-Version 2013-01-12 (516ec0f5) from git://github.com/embear/vim-localvimrc.git
+Version 2015-10-02 (7ed3573a) from:
+https://github.com/embear/vim-localvimrc.git
 
 Local customizations:
 
@@ -1127,7 +1427,8 @@ With [!], inserts as a single paragraph.
 
 More options exist - see |loremipsum.txt| for details.
 
-Version 0.2 from http://www.vim.org/scripts/script.php?script_id=2289
+Version 0.2 from:
+http://www.vim.org/scripts/script.php?script_id=2289
 
 Installation:
 - Distributed as a |vimball|  >
@@ -1240,10 +1541,14 @@ Buffer Grep:
 Development versions found at: http://github.com/sjbach/lusty
 
 Released versions appear here:
-Version 4.3 from http://www.vim.org/scripts/script.php?script_id=1890
+Version 4.3 from:
+http://www.vim.org/scripts/script.php?script_id=1890
+
+Version 2014-11-15 (0e73d8d) from:
+https://github.com/sjbach/lusty.git
 
 Installation:
-- Install in ~/.vim/plugin
+- Install in ~/.vim/plugin and ~/.vim/autoload
 
 ------------------------------------------------------------------------------
 LUSTYJUGGLER                                            *notes_lustyjuggler*
@@ -1323,16 +1628,21 @@ Bonus: This plugin also includes the following command, which will
 Development versions found at: http://github.com/sjbach/lusty
 
 Released versions appear here:
-Version 1.5.1 from http://www.vim.org/scripts/script.php?script_id=2050
+Version 1.5.1 from:
+http://www.vim.org/scripts/script.php?script_id=2050
+
+Version 2014-11-15 (0e73d8d) from:
+https://github.com/sjbach/lusty.git
 
 Installation:
-- Install in ~/.vim/plugin
+- Install in ~/.vim/plugin and ~/.vim/autoload
 
 ------------------------------------------------------------------------------
 MANPAGEVIEW                                             *notes_manpageview*
   File reading and writing across networks              |manpageview|
 
-Version 25l from http://www.drchip.org/astronaut/vim/vbafiles/manpageview.vba.gz
+Version 25l from:
+http://www.drchip.org/astronaut/vim/vbafiles/manpageview.vba.gz
 
 Version 25l requires patching of "sleep 2" to become "sleep 250m" to avoid
 freezing Vim for two tiresome seconds while ManPageView displays an error
@@ -1368,7 +1678,8 @@ Installation:
 MARKDOWN                                                 *notes_markdown*
   Markdown syntax support
 
-Version 2013-06-24 (fccf76f6) from https://github.com/tpope/vim-markdown.
+Version 2013-06-24 (fccf76f6) from:
+https://github.com/tpope/vim-markdown.
 
 Local Customizations:
 - Disable built-in embedded language support and setup our own--mainly to
@@ -1392,7 +1703,8 @@ Press '%' to match:
   - HTML tags <start> / </end>
   - etc.
 
-Version 1.13.2 from http://www.vim.org/scripts/script.php?script_id=39
+Version 1.13.2 from:
+http://www.vim.org/scripts/script.php?script_id=39
 
 Installation:
 - Unzip in ~/.vim/
@@ -1402,9 +1714,30 @@ Installation:
 MISC                                                    *notes_misc*
   Contains many useful Vimscript functions              |misc.txt|
 
-Version 1.8.5 from https://github.com/xolox/vim-misc
+Version 1.16.1 from:
+https://github.com/xolox/vim-misc
 
 This plugin is also used by the session plugin.
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+MONOKAI                                                 *notes_monokai*
+  A dark colorscheme
+
+Version 2014-06-10 (168adea) from:
+https://github.com/w0ng/vim-hybrid.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+MOONSCRIPT - support for a dialect of Lua               *notes_moonscript*
+  Support for a dialect of Lua
+
+Version 77cf9ef0 (December 4, 2013) from:
+https://github.com/leafo/moonscript-vim
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1413,7 +1746,9 @@ Installation:
 NETRW                                                   *notes_netrw*
   File reading and writing across networks              |netrw|
 
-Version 147e from http://www.vim.org/scripts/script.php?script_id=1075
+Version 147e from:
+http://www.vim.org/scripts/script.php?script_id=1075
+
 (Also check Dr. Chip's site: http://mysite.verizon.net/astronaut/vim/#NETRW)
 
 Use <Leader>fe to invoke :Explore.  This will explore in the directory
@@ -1439,23 +1774,24 @@ Installation:
 OMNICPPCOMPLETE                                         *notes_omnicppcomplete*
   C/C++ Omnicompletion                                  |omnicppcomplete|
 
-CTRL-X CTRL-O - Completion of normal identifiers.
+CTRL-x CTRL-o - Completion of normal identifiers.
 "." or "->" - Completion of struct fields.
 
 Within popup completion menu:
-CTRL-Y - Yes: accept currently selected match.
-CTRL-E - End completion, reverting to what was typed.
-CTRL-N - Insert next completion.
-CTRL-P - Insert previous completion.
-<Down> - Select next match (like CTRL-N), but don't insert it.
-<Up>   - Select previous match (like CTRL-P), but don't insert it.
+CTRL-y - Yes: accept currently selected match.
+CTRL-e - End completion, reverting to what was typed.
+CTRL-n - Insert next completion.
+CTRL-p - Insert previous completion.
+<Down> - Select next match (like CTRL-n), but don't insert it.
+<Up>   - Select previous match (like CTRL-p), but don't insert it.
 
 Requires Exuberant ctags database with these options: >
     ctags -R --c++-kinds=+p --fields=+iaS --extra=+q .
 
 For more details on insert-mode completion:|ins-completion|
 
-Version 0.41 from http://www.vim.org/scripts/script.php?script_id=1520
+Version 0.41 from:
+http://www.vim.org/scripts/script.php?script_id=1520
 
 Installation:
 - Unzip in ~/.vim/
@@ -1469,7 +1805,8 @@ Paredit tries to maintain a balanced state of matched characters, similar to
 paredit.el for Emacs.  This is helpful for Lisp programming languages like
 Clojure.
 
-Version 0.9.7 from http://www.vim.org/scripts/script.php?script_id=3988
+Version 0.9.7 from:
+http://www.vim.org/scripts/script.php?script_id=3988
 
 Installation (via pathogen):
 - Unzip in ~/.vim/bundle/paredit
@@ -1479,7 +1816,8 @@ Installation (via pathogen):
 PATHOGEN                                                *notes_pathogen*
   Runtime path management for bundles                   |notes_pathogen|
 
-Version 2013-01-19 from https://github.com/tpope/vim-pathogen
+Version 2013-01-19 from:
+https://github.com/tpope/vim-pathogen
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1497,7 +1835,7 @@ Also, the GUI version can make use of a "fancy" patched font.
 bundle/powerline/fontpatches/README.rst provides more information.
 If you use Droid Sans Mono as your font, a patched version of the font is
 available here:
-  https://github.com/jszakmeister/etc/blob/master/fonts/DroidSansMonoSlashed-Powerline.ttf
+https://github.com/jszakmeister/etc/blob/master/fonts/DroidSansMonoSlashed-Powerline.ttf
 
 You can also use the following block on Linux and Mac OS X to help detect the
 font and use it: >
@@ -1522,7 +1860,28 @@ If you don't want to use Powerline, you can add the following to your
 
     let g:EnablePowerline = 0
 <
-Version 2012-08-17 from https://github.com/Lokaltog/vim-powerline
+
+Powerline requires a patch to fix a bug where symbols in the symbol dictionary
+could get clobbered with empty results.  This fixes the issue by creating a
+copy of the original list:
+
+diff --git a/bundle/powerline/autoload/Pl/Parser.vim b/bundle/powerline/autoload/Pl/Parser.vim
+index a6f3428..3c91f56 100644
+--- a/bundle/powerline/autoload/Pl/Parser.vim
++++ b/bundle/powerline/autoload/Pl/Parser.vim
+@@ -79,6 +79,10 @@ function! Pl#Parser#ParseChars(arg) " {{{
+        let arg = a:arg
+
+        if type(arg) == type([])
++               " Retain our own copy of the list.  Otherwise, the original
++               " list might get stomped on.
++               let arg = copy(arg)
++
+                " Hex array
+                call map(arg, 'nr2char(v:val)')
+
+Version 2012-08-17 from:
+https://github.com/Lokaltog/vim-powerline
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1536,10 +1895,11 @@ To invoke the project window: >
 
 Local customizations:
   <F8>            - toggles the project window on and off.
-  CTRL-Q CTRL-P   - toggles the project window on and off.
-  CTRL-Q P        - toggles the project window on and off.
+  CTRL-q CTRL-p   - toggles the project window on and off.
+  CTRL-q P        - toggles the project window on and off.
 
-Version 1.4.1 from http://www.vim.org/scripts/script.php?script_id=69
+Version 1.4.1 from:
+http://www.vim.org/scripts/script.php?script_id=69
 
 Installation:
 - Unzip in ~/.vim/
@@ -1549,9 +1909,11 @@ Installation:
 PYTHON                                                  *notes_python*
   Python Syntax file with folding
 
-Version 3.3.5 (69f8e12a) from https://github.com/hdima/python-syntax
+Version 3.3.5 (69f8e12a) from:
+https://github.com/hdima/python-syntax
 
-(Also found here: http://www.vim.org/scripts/script.php?script_id=790)
+Also found here:
+http://www.vim.org/scripts/script.php?script_id=790
 
 Maintained by Dmitry Vasiliev.
 
@@ -1578,10 +1940,30 @@ PYTHONCOMPLETE                                          *notes_pythoncomplete*
 Although this is distributed with Vim, it lags behind in the official
 distribution.
 
-Version 0.9 from http://www.vim.org/scripts/script.php?script_id=1542
+Version 0.9 from:
+http://www.vim.org/scripts/script.php?script_id=1542
 
 Installation:
 - Install as ~/.vim/autoload/pythoncomplete.vim
+
+------------------------------------------------------------------------------
+QUICKFIX-REFLECTOR                                      *notes_quickfix-reflector*
+  Edit QuickFix and save changes                        |quickfix-reflector.txt|
+
+Version 2015-11-21 (410e551) from:
+https://github.com/stefandtw/quickfix-reflector.vim.git
+
+Perform a search that populates the QuickFix list, then edit the contents of
+the QuickFix list itself.  Delete any lines you don't want to be modified,
+and edit the text of lines you'd like to change.  In particular, it's very
+convenient to perform :%s/old/new/g within the QuickFix window to replace
+strings across many files at once.  Then, when you are satisfied with the
+contents of the QuickFix window, perform :w on the QuickFix window itself and
+your changes will be written back to the corresponding locations in the original
+files that were searched.
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 RAINBOW PARENTHESES                                     *notes_rainbow-parens*
@@ -1621,7 +2003,7 @@ Local customizations:
   take advantage of a 256-color terminal, if available.
 
 Version 2013-03-04 (eb8baa54) from:
-  git://github.com/kien/rainbow_parentheses.vim
+https://github.com/kien/rainbow_parentheses.vim
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1633,7 +2015,8 @@ REPEAT                                                  *notes_repeat*
 Plugins need to support this feature explicitly (such as the
 surround plugin).
 
-Version 1.1 (a81bef76) from https://github.com/tpope/vim-repeat
+Version 1.1 (a81bef76) from:
+https://github.com/tpope/vim-repeat
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1652,18 +2035,18 @@ add 2 lines to your ~/.lein/profiles.clj.
   ; ensure that redl is loaded on jvm startup
   :injections [(require '[redl core complete])]
   ; ensures that redl is available on the classpath
-  :dependencies [[redl "0.1.0"]]
+  :dependencies [[redl "0.2.2"]]
 <
 A minimal profiles.clj (including REDL, Spyscope, and lein pprint) would look
 like: >
 
-  {:user {:dependencies [[spyscope "0.1.2"]
-                         [redl "0.1.0"]]
+  {:user {:dependencies [[spyscope "0.1.3"]
+                         [redl "0.2.2"]]
           :injections [(require 'spyscope.core)
-                       (require '[redl complete core])]
-          :plugins [[lein-pprint "1.1.1"]]}}
+                       (require '[redl complete core])]}}
 <
-Version 2013-04-16 (96e2558e) from git://github.com/dgrnbrg/vim-redl.git
+Version 2014-01-20 (a5f13665) from:
+https://github.com/dgrnbrg/vim-redl.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1672,7 +2055,8 @@ Installation:
 RUNVIEW                                                 *notes_runview*
   Run lines through filter into buffer                  |RunView|
 
-Version 1e from http://mysite.verizon.net/astronaut/vim/#RUNVIEW
+Version 1e from:
+http://mysite.verizon.net/astronaut/vim/#RUNVIEW
 
 Installation:
 - Distributed as a |vimball|  >
@@ -1684,6 +2068,16 @@ Installation:
 Local customizations: >
   " Setup Bash as default view to run.
   let g:runview_filtcmd="bash"
+
+------------------------------------------------------------------------------
+RUST SUPPORT                                            *notes_rust*
+  Language support for Rust                             |rust|
+
+Version 2016-09-30 (2030019) from:
+https://github.com/rust-lang/rust.vim.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 SCRIPTEASE                                              *notes_scriptease*
@@ -1713,7 +2107,8 @@ Usage:
                 It's so handy, in fact, that it probably deserves its own
                 plugin.
 
-Version 1.0 (47872691) from git://github.com/tpope/vim-scriptease.git
+Version 1.0 (47872691) from:
+https://github.com/tpope/vim-scriptease.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1729,7 +2124,8 @@ Usage: >
   :PREVCOLOR  Move to alphabetically previous color
   :NEXTCOLOR  Move to alphabetically next color
 
-Version 2006-07-19 from http://www.vim.org/scripts/script.php?script_id=1488
+Version 2006-07-19 from:
+http://www.vim.org/scripts/script.php?script_id=1488
 
 Installation:
 - Copy ScrollColor.vim to ~/.vim/plugin/ScrollColor.vim
@@ -1750,7 +2146,8 @@ to work around.)
 Pressing "." in insert mode will cause "self." to be inserted
 in cases where "." would be a syntax error in Python.
 
-Version 1.0.2 from http://www.vim.org/scripts/script.php?script_id=2911
+Version 1.0.2 from:
+http://www.vim.org/scripts/script.php?script_id=2911
 
 Installation:
 - Copy to ~/.vim/plugin
@@ -1759,7 +2156,8 @@ Installation:
 SESSION                                                 *notes_session*
   Provides better session management                    |session.txt|
 
-Version 2.4.9 from https://github.com/xolox/vim-session
+Version 2.13 from:
+https://github.com/xolox/vim-session
 
 Note: this plugin requires the misc plugin.
 
@@ -1775,9 +2173,94 @@ Local Customizations:
   |:SaveSession!|, or ":SaveSession default".
 - The session storage (|g:session_directory|) has been configured to be
   $VIM_CACHE_DIR/sessions.
+- Persisting font settings is disabled.
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+SIGNATURE                                                *notes_signature*
+  Signs and helpers for bookmarks                        |signature|
+
+Signature is a plugin to place, toggle and display marks.
+
+Apart from the above, you can also:
+- Navigate forward/backward by position/alphabetical order
+- Display multiple marks (up to 2, limited by the signs feature)
+- Placing custom signs !@#$%^&*() as visual markers
+
+Version 2016-02-21 (8b7b4004) from:
+https://github.com/kshenoy/vim-signature.git
+
+Local Customizations:
+- Mark placement is "forced", which means the toggling feature is disabled.
+  To remove mark "x", use: >
+
+    dmx
+
+- Remove Signature maps that hide valuable Vim built-in functionality for
+  jumping to the start or end of recent yanks or changes:
+    '[, '], `[, and `]
+
+  This is done via assignment to g:SignatureMap in vimrc.  To restore this
+  functionality, unlet g:SignatureMap in your vimrc-after.vim file.
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+SNEAK                                                    *notes_sneak*
+  Motion based on two-character searching                |sneak|
+
+Local Customizations:
+- The set of label characters has been reduced to make it less likely to
+  hit one using a subsequent Vim edit command.
+
+" Reduce label characters to set least likely to be pressed after landing
+" at desired location (see issue #88 above; suggested set with "g" removed).
+let g:sneak#target_labels = "sfjktunbqz/SFKGHLTUNBRMQZ?"
+
+" Enable "streak" mode.
+let g:sneak#streak = 1
+
+" 0 : Always case-sensitive.
+" 1 : Case sensitivity is determined by 'ignorecase' and 'smartcase'.
+let g:sneak#use_ic_scs = 1
+
+" Avoid default {operator}z mapping.
+let g:sneak#textobject_z = 0
+
+" Use <Space>s and <Space>S for forward and backward sneak, and use streak mode
+" for operators.
+Nxmap   <Space>s        <Plug>Sneak_s
+Nxmap   <Space>S        <Plug>Sneak_S
+omap    <Space>s        <Plug>(SneakStreak)
+omap    <Space>S        <Plug>(SneakStreakBackward)
+
+Version 2015-04-28 (0f033073) from:
+https://github.com/justinmk/vim-sneak.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
+
+------------------------------------------------------------------------------
+SNIPPETS                                                 *notes_snippets*
+  Default snippets for UltiSnips
+
+Contains snippets for many languages (and for use by several different plugins).
+These snippets are not available for use by default due to the clearsnippets
+functionality not working as expected in UltiSnips 3.0 and the likelihood that
+clearsnippets will go away completely.  To make these snippets available, add
+the following to your user vimrc configuration: >
+
+   call pathogen#surround(expand('$VIMFILES/optional-bundle/snippets'))
+<
+Version 2016-02-19 (732978a) from:
+https://github.com/honza/vim-snippets.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|), placing
+  into ~/.vim/optional-bundle/snippets.
 
 ------------------------------------------------------------------------------
 SURROUND                                                *notes_surround*
@@ -1793,7 +2276,8 @@ Usage (An asterisk (*) is used to denote the cursor position):
 
 See |surround.txt| for more complete examples and documentation.
 
-Version 2.0 (0b2c9ff9) from https://github.com/tpope/vim-surround
+Version 2014-07-26 (fa433e0) from:
+https://github.com/tpope/vim-surround
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1807,7 +2291,8 @@ editor for Subversion's command-line interface.  When editing a
 commit log message, the Subversion diffs will be displayed in a
 separate window.
 
-Version 0.5 from http://www.vim.org/scripts/script.php?script_id=978
+Version 0.5 from:
+http://www.vim.org/scripts/script.php?script_id=978
 
 Note: Named svn-diff.vim in the index, but svn.vim is the new name.
 
@@ -1818,14 +2303,15 @@ Installation:
 SWAPIT                                                  *notes_swapit*
   Cycle through related words                           |swapit|
 
-Press CTRL-A to cycle forward through the list of related words
-Press CTRL-X to cycle forward through the list of related words
+Press CTRL-a to cycle forward through the list of related words
+Press CTRL-x to cycle forward through the list of related words
 
 Works in Normal and Visual mode.
 
-E.g., with cursor on "true" pressing CTRL-A changes the word to "false".
+E.g., with cursor on "true" pressing CTRL-a changes the word to "false".
 
-Version 0.3.2 from http://www.vim.org/scripts/script.php?script_id=2294
+Version 0.3.2 from:
+http://www.vim.org/scripts/script.php?script_id=2294
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1834,22 +2320,46 @@ Installation:
 SYNTASTIC                                                *notes_syntastic*
  Syntax checking hacks for vim                           |syntastic|
 
-Can launch "checkers" to verify syntax and hunt for errors when working with
-particular kinds of files.  For instance, it can run pylint, pyflakes, or pep8
-to check the syntax of your Python file and to hunt for other kinds of errors
-(unused imports, shadowing of variable names, etc.).
+If you just want to turn everything off, try this: >
 
-To show a location list with the errors, use the |:Errors| command.  On
-actively checked file types, Syntastic will run the checkers whenever you
-save.  On passive file types, you can run them manually with
-|:SyntasticCheck|.  You can also toggle the mode for a buffer using
-|:SyntasticToggleMode|.
+  :SyntasticFiletypeDefault *
+
+You may put that command in your vimrc-after.vim file to make it permanent.
+
+To clear existing errors on a buffer, execute the following: >
+
+  :SyntasticReset
+
+Syntastic can launch "checkers" to verify syntax and hunt for errors when
+working with particular kinds of files.  For instance, it can run pylint,
+pyflakes, or pep8 to check the syntax of your Python file and to hunt for other
+kinds of errors (unused imports, shadowing of variable names, etc.).
+
+On actively checked file types, Syntastic will run the checkers whenever you
+save.  On passive file types, you can run them manually with |:SyntasticCheck|.
+
+After checking, view a location list with the errors via the |:Errors| command,
+or toggle the location list via CTRL-Q CTRL-L.
+
+Syntastic maintains a global mode to determine when to check a file.  In
+"passive" mode, checks are done manually via |:SyntaxCheck|.  In "active" mode,
+files are checked when they are saved.  The global mode may be toggled via
+|:SyntasticToggleMode|.  Certain filetypes may be designated as always-active or
+always-passive.  To provide comfortable defaults, certain filetypes are preset
+in vimfiles to be marked "active", and the global mode is initially set to
+"passive" to avoid running Syntastic checks unexpectedly on arbitrary
+filetypes.
+
+To stop showing the current Syntastic errors, use |:SyntasticReset|; this
+clears the currently displayed errors, but will not prevent new errors
+from showing at the next Syntastic check operation.
 
 Local customizations:
-- Turned off active mode for everything but vim, python, and ruby.  You can
-  set |g:syntastic_mode_map| if you need different behavior.
-- Turned off warnings (via |g:syntastic_quiet_warnings|) because some checkers
-  are really verbose (pylint, for example).
+- Set the global mode to "passive", and configure a few filetypes to be
+  "active".  You can set |g:syntastic_mode_map| if you need different behavior.
+- Turned off warnings globally (via |g:syntastic_quiet_messages|) because some
+  checkers are really verbose (pylint, for example).  Warnings may be changed on
+  an individual buffer basis via |b:syntastic_quiet_messages|.
 - Enabled balloon support so that you can hover over the line with the error
   and see what is wrong.
 - Disabled highlighting of the portion of the line containing the error.
@@ -1857,9 +2367,151 @@ Local customizations:
   default--which is confusing.
 - Customized the Powerline segment to use a shortened form for errors and
   warnings.
-- Use nicer error and warning symbols where Vim can support it.
+- Used nicer error and warning symbols where Vim can support it.
 
-Version 2013-05-27 (cc1b898c) from git://github.com/scrooloose/syntastic.git
+In addition, several custom commands were added to control Syntastic's behavior.
+
+:SyntasticBufferMode
+:SyntasticBufferMode active
+:SyntasticBufferMode passive
+:SyntasticBufferMode inherited
+        Adjust the active/passive mode for the current buffer.  With no
+        arguments, display the per-buffer mode.  Setting to "inherited"
+        causes the per-buffer setting to be removed so that the global setting
+        will be used.
+
+        When changing the mode, a :SyntasticReset command will be issued to
+        clear any existing errors.
+
+:SyntasticBufferChecking
+:SyntasticBufferChecking on
+:SyntasticBufferChecking off
+:SyntasticBufferChecking inherited
+        Adjust whether the buffer is eligible for checking.  With no arguments,
+        display the per-buffer setting.  Setting to "inherited" causes the
+        per-buffer setting to be removed.
+
+        When setting to "off", a :SyntasticReset command will be issued to
+        clear any existing errors.
+
+:SyntasticBufferIgnoreLevel
+:SyntasticBufferIgnoreLevel nothing
+:SyntasticBufferIgnoreLevel warnings
+:SyntasticBufferIgnoreLevel errors
+:SyntasticBufferIgnoreLevel inherited
+        Adjusts the ignore level for filtering error messages for the current
+        buffer.
+        Argument:
+          (none)        Display the per-buffer level.
+          nothing       Ignore nothing (i.e., all warnings are enabled).
+          warnings      Ignore warnings (keeping errors)
+          errors        Ignore errors (keeping warnings)
+          inherited     Set level to current global level.
+
+        When changing the level, a :SyntasticReset command will be issued to
+        clear any existing errors.
+
+:SyntasticBufferIgnoreRegex
+:SyntasticBufferIgnoreRegex .
+:SyntasticBufferIgnoreRegex ..
+        Adjusts the ignore regular expression for filtering error messages for
+        the current buffer.  With no arguments, display the per-buffer setting.
+        Argument:
+          (none)        Display the per-buffer regex.
+          (some regex)  Set regex to supplied argument.
+          .             Disable regex so nothing is ignored.
+                        (displayed as <nothing>)
+          ..            Set regex to current global regex value.
+
+        When changing the regex, a :SyntasticReset command will be issued to
+        clear any existing errors.
+
+:SyntasticFiletypeActive
+:SyntasticFiletypeActive list-of-filetypes
+:SyntasticFiletypePassive
+:SyntasticFiletypePassive list-of-filetypes
+:SyntasticFiletypeDefault list-of-filetypes
+:SyntasticFiletypeDefault *
+        Setup which filetypes to consider as "always active" or "always
+        passive".  Syntastic defines an active filetype as one that will be
+        checked on each save.  Passive filetypes are checked only via a manual
+        invocation of :SyntasticCheck.  By default, filetypes follow Syntastic's
+        global mode (which may be toggled via :SyntasticToggleMode).  Within
+        vimfiles, the global mode defaults to "passive" so that files must be
+        manually checked in general.  To override this global behavior on a
+        per-filetype basis, Syntastic maintains two separate lists of filetypes,
+        designated "active" filetypes and "passive" filetypes.  In the global
+        "passive" mode, files are generally not automatically checked except for
+        filetypes marked as "active"; similarly, in the global "active" mode,
+        all files are generally checked except for filetypes marked as
+        "passive".  Perhaps surprisingly, Syntastic permits a filetype to be
+        designated both "active" and "passive" simultaneously.  This is because
+        in the global "passive" mode, the list of "passive" filetypes is
+        ignored, and in global "active" mode, the list of "active" filetypes is
+        ignored.  But because this pathological case doesn't make much sense,
+        vimfiles treats the "active" and "passive" lists as though they were
+        disjoint.  Using the above commands to place a filetype on the "active"
+        or "passive" list will remove that filetype from the other list.
+
+        Examples:
+
+          " Show which filetypes are listed as "active".
+          SyntasticFiletypeActive
+
+          " Setup python and c as "active" filetypes.
+          SyntasticFiletypeActive python c
+
+          " Setup python as a "passive" filetype.
+          SyntasticFiletypePassive python
+
+          " Setup c to be a default filetype (tracking the global mode).
+          SyntasticFiletypeDefault c
+
+          " Setup all filetypes to track the global mode.
+          SyntasticFiletypeDefault *
+
+        When making changes, a :SyntasticReset command will be issued to
+        clear any existing errors.
+
+:SyntasticBufferSetup very_strict
+:SyntasticBufferSetup strict
+:SyntasticBufferSetup strict_except_case
+:SyntasticBufferSetup lax
+        These provide a convenient way to set multiple per-buffer settings.
+
+        Argument:
+          very_strict         Enable (almost) all warnings and errors.
+          strict              Enable most warnings and errors.
+          strict_except_case  Enable most warnings and errors except those
+                              related to the case of identifiers.
+          lax                 Enable errors but disable most warnings.
+
+        These settings are subject to change over time as we learn more about
+        the behavior of the various checkers and their settings.  These commands
+        adjust things such as which checkers to use and what errors and warnings
+        to ignore.
+
+        When making changes, a :SyntasticReset command will be issued to
+        clear any existing errors.
+
+        Python's "future" package imports a number of modules from "builtins";
+        these are often unused and "flake8" will complain about them by default,
+        but for maintainability reasons it's important to keep them all imported
+        anyway.  g:Flake8IgnoredImports holds this list of modules, and
+        :SyntasticBufferSetup will adjust :SyntasticBufferIgnoreRegex to ignore
+        warnings about these unused imports.
+
+It's useful to combine the above commands with the |localvimrc| plugin (see
+|notes_localvimrc|).  For example, if a project requires strict checking, enable
+this by creating a .lvimrc file at the root of the project with the following
+content:
+
+  if &filetype == "python"
+      SyntasticBufferSetup strict
+  endif
+
+Version 2015-03-19 (ebadf9af) from:
+https://github.com/scrooloose/syntastic.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1870,10 +2522,11 @@ TAGBAR                                                  *notes_tagbar*
 
 Local customizations:
   <S-F8>        - toggle the tagbar (:TagbarToggle)
-  CTRL-Q CTRL-T - toggle the tagbar (:TagbarToggle)
-  CTRL-Q T      - toggle the tagbar (:TagbarToggle)
+  CTRL-q CTRL-t - toggle the tagbar (:TagbarToggle)
+  CTRL-q T      - toggle the tagbar (:TagbarToggle)
 
-Version 2013-09-18 (5566cb34) from https://github.com/majutsushi/tagbar
+Version 2014-02-14 (614b5b24) from:
+https://github.com/majutsushi/tagbar
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1882,9 +2535,13 @@ Requires ctags.exe to be in the path.  Generally this comes with Linux
 distributions.  Compiled binaries may be found at
 http://ctags.sourceforge.net/
 
-Added support for reStructuredText using rst2ctags.  rst2ctags can be found
-at https://github.com/jszakmeister/rst2ctags, and a copy has been embedded
-in $VIMFILES/tool/rst2ctags.
+Added support for reStructuredText using rst2ctags v0.1.5.  rst2ctags can be
+found at https://github.com/jszakmeister/rst2ctags, and a copy has been
+embedded in $VIMFILES/tool/rst2ctags.
+
+Also added support for markdown using markdown2ctags v0.1.2.  markdown2ctags
+can be found at https://github.com/jszakmeister/markdown2ctags, and a copy has
+been embedded in $VIMFILES/tool/markdown2ctags.
 
 ------------------------------------------------------------------------------
 TAGSIGNATURE                                            *notes_tagsignature*
@@ -1893,7 +2550,8 @@ TAGSIGNATURE                                            *notes_tagsignature*
 Displays the signature of a tag when you hover the mouse over that tag.
 Requires a tags file.
 
-Version r714 from http://www.vim.org/scripts/script.php?script_id=2714
+Version r714 from:
+http://www.vim.org/scripts/script.php?script_id=2714
 
 Installation:
 - Copy to ~/.vim/plugin/tag_signature.vim
@@ -1926,7 +2584,25 @@ Local customizations:
 Blank lines are not commented, and the <c-_> and <Leader>_ mappings are turned
 off.  'gc' will do what you want most of the time.
 
-Version 2013-01-06 (b18839a7) from git://github.com/tomtom/tcomment_vim.git
+Version 2016-02-28 (742632b) from:
+https://github.com/tomtom/tcomment_vim.git
+
+Along with a small patch to allow ``g:tcomment#blank_lines = 0``:
+
+diff --git a/bundle/tcomment_vim/autoload/tcomment.vim b/bundle/tcomment_vim/autoload/tcomment.vim
+index 8a72f9e..67b2d1c 100644
+--- a/bundle/tcomment_vim/autoload/tcomment.vim
++++ b/bundle/tcomment_vim/autoload/tcomment.vim
+@@ -1546,7 +1546,7 @@ function! s:ProcessLine(comment_do, match, checkRx, replace)
+     " TLogVAR a:comment_do, a:match, a:checkRx, a:replace
+     try
+         if !(g:tcomment#blank_lines > 0 || a:match =~ '\S')
+-            return a:match
++            return ['', 0]
+         endif
+         if a:comment_do ==# 'k'
+             if a:match =~ a:checkRx
+
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1946,7 +2622,8 @@ entire hunk.  So 'vadh' and 'vidh' both select the entire hunk.
 Supports navigating between files and hunks with some movement mappings.  File
 mappings move based on diff or index lines.  Hunks look for '@@'.
 
-Version 0.0.2 (822ae0a1) from git://github.com/kana/vim-textobj-diff.git
+Version 0.0.2 (822ae0a1) from:
+https://github.com/kana/vim-textobj-diff.git
 
 Local customizations:
 
@@ -1972,7 +2649,8 @@ Use "f" for text objects based on functions.
 
 To add more language support, see |textobj-function-customizing|.
 
-Version 0.1.3 (97b2c11c) from git://github.com/kana/vim-textobj-function.git
+Version 0.4.0 (adb50f38) from:
+https://github.com/kana/vim-textobj-function.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -1988,7 +2666,8 @@ Use "i" for text objects based on indentation.
 E.g., to select block:
     vii
 
-Version 0.0.5 (a17bd544) from git://github.com/kana/vim-textobj-indent.git
+Version 0.0.5 (a17bd544) from:
+https://github.com/kana/vim-textobj-indent.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -2006,8 +2685,8 @@ Use "rs" for text objects based on sections.
 E.g., to select the contents of a section:
     virs
 
-Version 0.2.0 (72c511b7) from
-git://github.com/jszakmeister/vim-textobj-rst.git
+Version 0.2.0 (72c511b7) from:
+https://github.com/jszakmeister/vim-textobj-rst.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -2019,7 +2698,8 @@ TEXTOBJ-USER                                            *notes_textobj-user*
 Library to support construction of user-defined text objects; by itself,
 library is not terribly useful.  Enables things like |textobj-indent|.
 
-Version 0.3.12 (1b738334) from git://github.com/kana/vim-textobj-user.git
+Version 0.6.2 (96aeac30) from:
+https://github.com/kana/vim-textobj-user.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -2034,8 +2714,8 @@ Xterm is partially supported as well (it will use an underline versus a line
 cursor by default).  This technique also works with tmux, although you may
 need version 1.7 or better.
 
-Version 0.1.1 (a97b8bed) from
-git://github.com/jszakmeister/vim-togglecursor.git
+Version 0.5.1 (8e88f926) from:
+https://github.com/jszakmeister/vim-togglecursor.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -2048,12 +2728,20 @@ Provides TextMate-like snippets for inserting text with placeholders.
 
 Configured as follows:
 
-- <Tab>   - Expand trigger
-- <Tab>   - Jump forward trigger
-- <s-Tab> - Jump backward trigger
+- <Tab>       - Expand trigger or jump forward to the next tabstop
+- <M-u><Tab>  - Jump forward to the next tabstop
+- <S-Tab>     - Jump backward to the previous tabstop
+- <C-Tab>     - List snippets whose triggers start with prefix at cursor
+- <M-u><M-l>  - List snippets whose triggers start with prefix at cursor
 
-To see snippets whose triggers begin with a given prefix, type the prefix
-followed by <C-Tab>.
+<Tab> will first try to expand a snippet if it can; otherwise, if a snippet is
+active, it will jump to the next tabstop; otherwise, it behaves like a normal
+<Tab> operation.
+
+If you'd like to jump forward when the cursor is at a valid trigger, use
+<M-u><Tab> to force jumping instead of expansion.  If you expand the trigger by
+mistake, first undo the expansion (via <M-u><M-u> or <M-z>), then use
+<M-u><Tab> to force the jump operation).
 
 Snippets live in any "UltiSnips" subdirectory on the 'runtimepath'.  Snippets
 earlier in the 'runtimepath' take precedence.  For example:
@@ -2061,17 +2749,24 @@ earlier in the 'runtimepath' take precedence.  For example:
 - ~/.vim/UltiSnips         - Snippets common to all configurations
 - ~/.vim/local/UltiSnips   - Optional snippets local to an installation
 
-For select languages, the default snippets provided by UltiSnips are
-overridden by local snippets.  This is accomplished by putting the directory
-~/.vim/pre-bundle/clearsnippets into the 'runtimepath' before the new locally
-defined snippets.  In this directory are snippets files using the
-"clearsnippets" directive to wipe out the default snippets.
+The default snippets that came with UltiSnips have been split into a separate
+plugin and are no longer included with UltiSnips.  We've included a plugin
+dedicated to providing default snippets for your convenience.  Take a look at
+|notes_snippets| for more information about where the snippets reside and how to
+make them available, should you want to use them.
+
+The default snippets provided by vimfiles are set to have a priority level of
+-5.  This should allow all vimfiles snippets to override many plugin provided
+ones, but still allow use of the default priorty by users to override vimfiles
+provided snippets.
 
 To avoid rampant duplication when defining snippets, a custom set of Python
 scripts is used to define snippets.  For example, the file
 ~/.vim/UltiSnips/c.snippets.py generates the snippets found in
 ~/.vim/UltiSnips/c.snippets.  All snippets make be "built" via the Makefile in
-~/.vim/UltiSnips by executing "make".
+~/.vim/UltiSnips by executing "make".  To make it easier to open a
+.snippets.py for the filetype you happen to be editing, you can use the
+EditSnippets command.
 
 To reduce the ceremony in creating a new file, expanding a snippet has been
 hooked to provide a filetype and filename aware "snippet".  Typing skel<TAB>
@@ -2090,12 +2785,29 @@ snippets in the following order:
 
 The first one to match will be expanded.
 
-Version 84c36fccd88d6ddbc73f62abfd7f3e56523422e9 from
-git://github.com/SirVer/ultisnips.git
+To disable UltiSnips entirely, set the below variable before vimrc runs: >
+
+    let g:EnableUltiSnips = 0
+
+This is useful for forks of Vim that don't support Python bindings (e.g.,
+NeoVim).
+
+Version 2016-02-13 (25882e9) from:
+https://github.com/SirVer/ultisnips.git
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
-- See ~/.vim/vimrc for detailed configuration steps
+- See ~/.vim/vimrc for detailed configuration steps.
+
+------------------------------------------------------------------------------
+VADER                                                   *notes_vader*
+    Unit testing for vimscript                          |vader.txt|
+
+Version 2016-05-22 (6b966e1) from:
+https://github.com/junegunn/vader.vim
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 VCSCOMMAND                                               *notes_vcscommand*
@@ -2126,11 +2838,11 @@ Maps work on file associated with current buffer
 The ex commands allow additional parameters which are generally passed to
 the underlying source control system.
 
-Version 2c1dc008d4eeb7204f01c01f71cb8a01c066e9d0
-from git://github.com/drmikehenry/vcscommand.vim.git
+Version 2c1dc008d4eeb7204f01c01f71cb8a01c066e9d0 from:
+https://github.com/drmikehenry/vcscommand.vim.git
 
-(Originally version 1.99.46
-from http://www.vim.org/scripts/script.php?script_id=90)
+Originally version 1.99.46 from:
+http://www.vim.org/scripts/script.php?script_id=90
 
 Installation:
 - Follow bundle installation instructions (|bundle_installation|).
@@ -2139,7 +2851,8 @@ Installation:
 VIMBALL                                                 *notes_vimball*
   "Package manager" for supporting .vba VimBalls        |vimball|
 
-Version 26 from http://vim.sourceforge.net/scripts/script.php?script_id=1502
+Version 26 from:
+http://vim.sourceforge.net/scripts/script.php?script_id=1502
 
 Installation:
 - Untar in ~/.vim/
@@ -2150,7 +2863,7 @@ VIS                                                     *notes_vis*
 
 Performs an arbitrary Ex command on a visual highlighted block.
 
-Mark visual block (CTRL-V) or visual character (v),
+Mark visual block (CTRL-v) or visual character (v),
   press ':B ' and enter an Ex command [cmd].
 
   ex. Use ctrl-v to visually mark the block then use
@@ -2197,7 +2910,7 @@ Installation:
     :so %
     :q
 
-Version 20a from section "Visual Block Commands" at
+Version 20a from section "Visual Block Commands" at:
 http://mysite.verizon.net/astronaut/vim/index.html
 
 ------------------------------------------------------------------------------
@@ -2242,7 +2955,7 @@ Installation:
     :so %
     :q
 
-Version 20b from section "Visual Incrementing" at
+Version 20b from section "Visual Incrementing" at:
 http://mysite.verizon.net/astronaut/vim/index.html
 
 ------------------------------------------------------------------------------
@@ -2280,7 +2993,7 @@ Installation:
     :so %
     :q
 
-Version 4c from section "Visual Block Sorting" at
+Version 4c from section "Visual Block Sorting" at:
 http://mysite.verizon.net/astronaut/vim/index.html
 
 ------------------------------------------------------------------------------
@@ -2300,8 +3013,18 @@ Installation:
     :so %
     :q
 
-Version 4e from section "Visual Mode Based Swap" at
+Version 4e from section "Visual Mode Based Swap" at:
 http://mysite.verizon.net/astronaut/vim/index.html
+
+------------------------------------------------------------------------------
+WOMBAT256I                                              *notes_wombat256i*
+  A dark colorscheme
+
+Version 2013-08-04 (f99475e) from:
+https://github.com/dsolstad/vim-wombat256i.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
 
 ==============================================================================
 4.  Extensions                                          *notes_extensions*
@@ -2310,11 +3033,22 @@ http://mysite.verizon.net/astronaut/vim/index.html
 C ADDITIONS                                             *notes_c_additions*
   Extra syntax highlighting for C
 
-Taken from: http://www.vim.org/scripts/script.php?script_id=3064.
+Taken from:
+http://www.vim.org/scripts/script.php?script_id=3064
 
 Installation:
 - Download the new syntax file from the above url.
 - Install it into bundle/c-additions/after/syntax/.
+
+------------------------------------------------------------------------------
+PYTHON INDENTATION SUPPORT                              *notes_python_indent*
+  Improved Python indentation support
+
+Version 2015-03-03 (e66de53b) from:
+https://github.com/hynek/vim-python-pep8-indent.git
+
+Installation:
+- Follow bundle installation instructions (|bundle_installation|).
 
 ------------------------------------------------------------------------------
 TMUX SYNTAX                                             *notes_tmux_syntax*
@@ -2327,24 +3061,35 @@ Install: >
 5.  Customizations                                      *notes_customizations*
 
 ------------------------------------------------------------------------------
-Per-user overrides
+Overrides                                               *notes_overrides*
 
-In order to allow per-user customizations while still sharing the bulk
-of the vimfiles configuration, a "vimuser" concept is defined based on
-environment variables.
+In order to allow customization while still sharing the bulk of the vimfiles
+configuration, vimfiles provides three kinds of override directories that may
+contain extensions and adjustments.
 
-These environment variables may be set outside of Vim using standard
-operating-system methods.  In addition, it may be convenient to set them in
-the ~/.vimrc (%USERPROFILE%\_vimrc on Windows) file before the "runtime vimrc"
-command invokes the main "vimrc" file, since no logout/login is required to
-make the settings take effect.  It's safe to put assignments like the
-following in ~/.vimrc, as the ~/.vim/setup.py script will not clobber them: >
+Override directories (in increasing order of priority):
+- VIMLOCALFILES:      location-specific settings (e.g., for your workgroup)
+- VIMUSERFILES:       per-user settings usable at all locations
+- VIMUSERLOCALFILES:  per-user location-specific settings
+
+The directories are configured using envionment variables.  These environment
+variables may be set outside of Vim using standard operating-system methods.  In
+addition, it may be convenient to set them in the ~/.vimrc (%USERPROFILE%\_vimrc
+on Windows) file before the "runtime vimrc" command invokes the main "vimrc"
+file, since no logout/login is required to make the settings take effect.  It's
+safe to put assignments like the following in ~/.vimrc, as the ~/.vim/setup.py
+script will not clobber them: >
 
   let $VIMUSER = "username"
 
 The environment variables are:
 
-VIMFILES
+VIMUSER
+  Name of the user running Vim.  This defaults to the logged-in user, but
+  it may be changed to allow one user to activate another user's settings
+  (e.g., to allow "root" to share another user's customizations).
+
+VIMFILES (automatically determined; can't be overridden)
   The directory holding the main "vimrc" file.  Typically this will be one of
   the following:
     ~/.vim                            Unix, OS/X
@@ -2354,14 +3099,24 @@ VIMFILES
   "C:\Documents and Settings\USERNAME" or "C:\Documents\USERNAME", though the
   location may vary.
 
-VIMUSER
-  Name of the user running Vim.  This defaults to the logged-in user, but
-  it may be changed to allow one user to activate another user's settings
-  (e.g., to allow "root" to share another user's customizations).
+VIMLOCALFILES
+  Directory holding location-specific settings, typically to allow sharing of
+  configuration across an organization or workgroup.  If not set, this defaults
+  to the first existing directory in this list:
+
+  For Unix and OS/X:
+
+    $VIMFILES/../.vimlocal
+    $VIMFILES/local
+
+  For Windows:
+
+    $VIMFILES\..\_vimlocal
+    $VIMFILES\local
 
 VIMUSERFILES
-  Directory holding the per-user directory for each user.  If not set, this
-  defaults to the first existing directory in this list:
+  Directory holding the per-user directory.  If not set, this defaults to the
+  first existing directory in this list:
 
   For Unix and OS/X:
 
@@ -2373,45 +3128,111 @@ VIMUSERFILES
     %USERPROFILE%\_vimuser
     %USERPROFILE%\_vimfiles\user\$VIMUSER
 
-  The first directory lives outside of the $VIMFILES area, which makes it easy
-  to maintain the user settings completely outside the source-controlled
-  $VIMFILES tree.  The second directory is more convenient for users
-  maintaining a fork of the $VIMFILES tree.
+VIMUSERLOCALFILES
+  Directory holding the per-user location-specific directory.  If not set, this
+  defaults to the first existing directory in this list:
 
-The directory $VIMUSERFILES specifies a per-user runtime directory.  This
-directory will be added to 'runtimepath'.  For example, the Unix user
-"someuser"  will have 'runtimepath' agumented with the first-existing
-directory in the below list:
+  For Unix and OS/X:
 
-  ~/.vimuser
-  ~/.vim/user/someuser
+    ~/.vimuserlocal
 
-VIMRC_BEFORE, VIMRC_AFTER                     *VIMRC_BEFORE*   *VIMRC_AFTER*
-  These point to "before" and "after" scripts.  If these files
-  exist, they will be sourced before or after the main "vimrc" file.
-  |VIMRC_BEFORE| is useful for changing things like <Leader> so that it
-  will be used by mappings in the main "vimrc".  Most other settings are best
-  overridden in |VIMRC_AFTER|.
+  For Windows:
 
-  By default, these files are named "vimrc-before.vim" and "vimrc-after.vim",
-  and are located in the $VIMUSERFILES directory, at these locations:
+    %USERPROFILE%\_vimuserlocal
 
-    $VIMUSERFILES/vimrc-before.vim
-    $VIMUSERFILES/vimrc-after.vim
+Some of these directories live outside of the $VIMFILES area, which makes it
+easy to maintain the settings completely outside the source-controlled $VIMFILES
+tree; others are are inside the tree, which may be more convenient for users
+users maintaining a fork of VIMFILES.
 
-  For example, the |VIMRC_BEFORE| script for the Unix user "someuser" would be
-  at one of the following two locations (depending whether ~/.vimuser exists):
+Each override directory will be added to 'runtimepath'.  Higher priority
+override directories are added earlier in 'runtimepath' (and any associated
+'/after' directory is added later in 'runtimepath').  This means that override
+directories may contain directories such as '/bundle', '/UltiSnips', '/plugin',
+etc.
 
-    ~/.vimuser/vimrc-before.vim
-    ~/.vim/user/someuser/vimrc-before.vim
+In addition, each override directory may optionally contain any of the
+following files for augmenting the main vimrc files found in $VIMFILES:
 
-  Note: It's preferrable to keep all of the per-user files within
-  $VIMUSERFILES; however, for backward compatibility, the following locations
-  are also checked for "before" and "after" scripts, but only when
-  VIMUSERFILES is allowed to default to $VIMFILES/user/$VIMUSER:
+- vimrc-vars.vim     |VIMRC_VARS|
+- vimrc-before.vim   |VIMRC_BEFORE|
+- vimrc-after.vim    |VIMRC_AFTER|
 
-    $VIMFILES/user/$VIMUSER-before.vim
-    $VIMFILES/user/$VIMUSER-after.vim
+vimrc-vars.vim                                *VIMRC_VARS*
+
+  This "vars" script is provided for variable initializations that must
+  occur extremely early.  It is located immediately within an override
+  directory (e.g., $VIMUSERFILES/vimrc-vars.vim).
+
+  |VIMRC_VARS| within the override directories are sourced in lowest-to-highest
+  priority order, so that the highest-priority script has the last word on
+  setting the variables.
+
+  Most users won't require a |VIMRC_VARS| script.  Its purpose is to solve a
+  chicken-and-egg problem with a |VIMRC_BEFORE| script:
+
+  - The user wants to do ":colorscheme SomeColorScheme" in his |VIMRC_BEFORE|;
+  - Support for SomeColorScheme lives in an arbitrary bundle;
+  - Activating all bundles in advance of |VIMRC_BEFORE| makes it hard for the
+    user to disable a particular bundle.
+
+  Only the most primitive settings should live in |VIMRC_VARS|; everything else
+  belongs in |VIMRC_BEFORE| or |VIMRC_AFTER|.  The most likely reason for
+  needing this script is to disable a bundle on a per-user basis.  For example,
+  to disable the "fixkey" bundle, place the following line in
+  $VIMUSERFILES/vimrc-vars.vim: >
+
+    let g:pathogen_disabled = ["fixkey"]
+
+vimrc-before.vim, vimrc-after.vim             *VIMRC_BEFORE*   *VIMRC_AFTER*
+  If these files exist, they will be sourced before or after the majority of the
+  main "vimrc" file.  These scripts are located immediately within an override
+  directory (e.g., $VIMUSERFILES/vimrc-before.vim).
+
+  |VIMRC_BEFORE| files are sourced fairly early, but after all 'runtimepath'
+  manipulations are finished (such as activating bundles).  They are useful for
+  the relatively rare things that must happen early, such as setting <Leader> so
+  that it will be used by subsequent mappings in the main "vimrc".  Most other
+  settings are best overridden in |VIMRC_AFTER|scripts, which will be sourced at
+  end of the main "vimrc" file.
+
+  |VIMRC_BEFORE| scripts within the override directories are sourced in
+  highest-to-lowest priority order, so that the highest-priority script has the
+  first chance to make settings; conversely, |VIMRC_AFTER| scripts are sourced
+  in the opposite order, giving them the last word on setting the variables.
+
+------------------------------------------------------------------------------
+Python Path
+
+Python's sys.path is used to locate Python modules when import commands are
+issued.  Especially for use with UltiSnips, it can be useful for Vim's
+embedded Python interpreter to have an augmented sys.path so that helper
+modules may be used from multiple places conveniently.
+
+For this reason, the function AugmentPythonPath() is called from vimrc to
+scan all paths in Vim's 'runtimepath' for child directories named "pylib" and
+adds them to Python's sys.path (unless they are already present).  If a module
+lives in such a "pylib" path, it may be imported from any Python code executed
+within Vim.
+
+------------------------------------------------------------------------------
+GUI options                                    *notes_guioptions*
+
+To conserve screen space, several GUI features are disabled by default.
+The 'guioptions' option controls these settings.  You can use any of the
+below lines in your |VIMRC_AFTER| script to bring back these GUI features. >
+
+  " Enable menu bar.
+  set guioptions+=m
+
+  " Enable right-side scrollbar always.
+  set guioptions+=r
+
+  " Enable left-side scrollbar always.
+  set guioptions+=l
+
+  " Enable the toolbar.
+  set guioptions+=T
 
 ------------------------------------------------------------------------------
 Colorschemes
@@ -2421,6 +3242,40 @@ your preferred colorscheme in |VIMRC_BEFORE|.  For example, for user
 drmikehenry, setup ~/.vim/user/drmikehenry/vimrc-before.vim with: >
 
   colorscheme nuvola
+
+If you don't choose a colorscheme, one will be chosen for you.  Since Gvim can
+use any colorscheme, vimfiles arbitrarily chooses a dark-background
+colorscheme.  When running in a console, Vim tries to detect whether your
+background is light or dark, but it can't really detect the background color
+properly in many cases; in such cases, Vim uses a heuristic to guess the
+background color, generally based on the terminal type.  For example, Vim can't
+generally detect the background color after ssh'ing to another machine or after
+executing ``su -`` or ``sudo -i``.  For this reason, vimfiles will
+unconditionally force a dark-background colorscheme for Gvim and whenever the
+background color detection algorithm in not trustworthy.
+
+But in the special case that the COLORFGBG environment variable is set, console
+Vim can correctly detect the background color.  Not all terminal emulators set
+this variable, but rxvt and KDE's konsole do (but sadly, xterm does not).  This
+variable is lost when executing ``su -`` or ``sudo -i``, and when ssh'ing to
+another machine (unless the ssh client and server settings are changed to
+propagate the variable to the server).  In the cases where this variable has
+been set, vimfiles will now honor it, so rxvt and konsole terminals that use a
+light background will receive a light-background colorscheme by default (unless
+overridden by the user).
+
+You may want to adjust your ssh client and server settings to propagate the
+COLORFGBG variable to the server, improving Vim's detection accuracy.  To
+accomplish this with openssh, add this line to /etc/ssh/sshd_config on the
+server: >
+
+    AcceptEnv COLORFGBG
+
+Then adjust the client settings by adding these lines to either ~/.ssh/config
+(for a single user) or /etc/ssh/ssh_config (for all users): >
+
+  Host *
+      SendEnv COLORFGBG
 
 ------------------------------------------------------------------------------
 Fonts
@@ -2488,7 +3343,11 @@ Lusty Juggler - rapidly switch among buffers
 
 BufMRU - most-recently-used buffer switcher
 
-  <space> Switch to MRU buffer and enter BufMRU mode.
+  <C-6> (CTRL-6) Switch to MRU buffer and enter BufMRU mode.  This is Vim's
+                 default keystroke for switching to the alternate buffer.
+  <Space><Space> Switch to MRU buffer and enter BufMRU mode.  This is easier
+                 to invoke and closer to the original single-<Space> mapping
+                 to aid muscle memory.
 
   See |notes_bufmru| for more details.
 
@@ -2520,11 +3379,34 @@ they are executable, e.g.: >
 Note: At present, fifosignal and fifowait are Unix-only.
 
 ------------------------------------------------------------------------------
+Tab page support
+
+Use <C-S-PageUp>/<C-S-PageDown> in Gvim to move the current tab page left or
+right.  This unfortunately doesn't work in console Vim because those key
+sequences aren't visible to Vim.
+
+------------------------------------------------------------------------------
+QuickFix keys                                           *notes_quickfix_keys*
+
+  oo      Return to other window
+  OO      Return to other window, close QF
+  <CR>    Open in existing        (<s-CR>  = stay in QF)
+  o<CR>   Open in existing        (o<s-CR> = stay in QF; O<s-CR> = close QF)
+  oh      Open horizontal split   (oH      = stay in QF; OH      = close QF)
+  ov      Open vertical split     (oV      = stay in QF; OV      = close QF)
+  ot      Open in new tab         (oT      = stay in QF; OT      = close QF)
+  <F1>    Display this help section (:help notes_quickfix_keys)
+  { / }   Move cursor to previous/next filename in QuickFix window
+
+The above mappings are active in QuickFix and Location List windows.
+Note: "O + unshifted" is the same as "O + shifted" (so "Oh" = "OH", etc.).
+
+------------------------------------------------------------------------------
 QuickFix window, diff mode
 
 Use <F4> and <S-F4> to navigate forward and backward.  When diff mode is
 active, browses through diff hunks; otherwise, when a Location List window is
-open, browses through the Location List; otherwise, opens and browses through
+open, browses through the Location List; otherwise, browses through
 the QuickFix list.
 
 New diff commands:
@@ -2533,7 +3415,7 @@ New diff commands:
     Compare unsaved changes in current window against original on-disk.
 
   :Diff
-    Initiate diff between current window and "next" window (found by <C-W>w).
+    Initiate diff between current window and "next" window (found by <C-w>w).
 
   :Diff {filename}
     Initiate diff between current window and {filename}.
@@ -2541,7 +3423,7 @@ New diff commands:
   :DiffClose
     Restore all diff windows and close them all except current window.
     Note: this is invoked as part of :OneWindow to ensure that the remaining
-    window won't be left in diff mode when <C-W>o is invoked.
+    window won't be left in diff mode when <C-w>o is invoked.
 
 Built-in commands for more manual control:
 
@@ -2560,7 +3442,7 @@ Dragging text in four directions
 
 Text may be "dragged" in any of the four directions (Up, Down, Left, or
 Right).  In normal and insert modes, the current line will be dragged; in
-select mode, the selection will be dragged.
+visual mode, the visual selection will be dragged.
 
 Lines dragged vertically move as whole lines.
 
@@ -2570,24 +3452,24 @@ shift width ('sw') variable temporarily set to one.  For block-wise
 selections, this implies that only the selected block is shifted.
 
 Dragging up:
-  <M-Up>        (select mode, insert mode, normal mode)
-  <M-K>         (select mode, insert mode, normal mode)
-  -             (select mode)
+  <M-Up>        (visual mode, insert mode, normal mode)
+  <M-k>         (visual mode, insert mode, normal mode)
+  -             (visual mode)
 
 Dragging down:
-  <M-Down>      (select mode, insert mode, normal mode)
-  <M-J>         (select mode, insert mode, normal mode)
-  +             (select mode)
+  <M-Down>      (visual mode, insert mode, normal mode)
+  <M-j>         (visual mode, insert mode, normal mode)
+  +             (visual mode)
 
 Dragging left:
-  <M-Left>      (select mode, insert mode, normal mode)
-  <M-H>         (select mode, insert mode, normal mode)
-  <Backspace>   (select mode)
+  <M-Left>      (visual mode, insert mode, normal mode)
+  <M-h>         (visual mode, insert mode, normal mode)
+  <Backspace>   (visual mode)
 
 Dragging right:
-  <M-Left>      (select mode, insert mode, normal mode)
-  <M-H>         (select mode, insert mode, normal mode)
-  <Space>       (select mode)
+  <M-Left>      (visual mode, insert mode, normal mode)
+  <M-h>         (visual mode, insert mode, normal mode)
+  <Space>       (visual mode)
 
 ------------------------------------------------------------------------------
 Deleting "Rubbish" Whitespace
@@ -2624,9 +3506,9 @@ For normal and visual modes, <Leader>q does the same as <M-q>.
 ------------------------------------------------------------------------------
 Moving "out" hierarchically
 
-Press <C-O><C-O> in insert or visual modes to exit "out" to the containing
+Press <C-o><C-o> in insert or visual modes to exit "out" to the containing
 context.  For example, if your cursor is between parentheses, pressing
-<C-O><C-O> will move out just beyond the parentheses.  This is helpful for
+<C-o><C-o> will move out just beyond the parentheses.  This is helpful for
 getting outside text that was automatically inserted (e.g., from a snippet).
 
 The following may be "exited": >
@@ -2637,16 +3519,38 @@ The following may be "exited": >
   break;
 
 ------------------------------------------------------------------------------
-Additional CTRL-O mappings
+Additional CTRL-o mappings
 
-<C-O>o      - Open a line below this one
-<C-O>;      - Append ";" to the current line
-<C-O>:      - Append ":" to the current line
-<C-O>.      - Append "." to the current line
-<C-O><CR>   - Append "." and <CR> to the current line unless overridden by a
+<C-o>o      - Open a line below this one
+<C-o>;      - Append ";" to the current line
+<C-o>:      - Append ":" to the current line
+<C-o>.      - Append "." to the current line
+<C-o><CR>   - Append "." and <CR> to the current line unless overridden by a
               filetype-specific mapping
-<C-O><C-H>  - Exit visual modes at start of selected text
-<C-O><C-L>  - Exit visual modes at end of selected text
+<C-o><C-h>  - Exit visual modes at start of selected text
+<C-o><C-l>  - Exit visual modes at end of selected text
+
+------------------------------------------------------------------------------
+Pressing <Enter> removes trailing whitespace
+
+To help avoid cluttering the file with trailing whitespace, pressing <Enter> in
+insert mode will strip trailing whitespace from the previous line.  This is
+helpful when trying to split a line such as the one below.  Consider this line:
+
+  Place cursor on X and press <Enter>
+
+With your cursor on the "X" above, pressing <Enter> would normally leave a
+trailing space character after the word "on"; this space will instead be
+removed.
+
+To intentionally preserve trailing whitespace when typing at the end of a line,
+simply avoid pressing <Enter>.  When pressing <Enter> in the middle of a line,
+more steps are involved.  For example, before pressing <Enter>, add a period,
+then press <Enter>, then go back and remove the period from the line.
+Alternatively, press <Enter>, then go back and restore the trailing whitespace
+on the previous line.  Though this is awkward, it's expected to be very rarely
+desirable in the course of normal editing that pressing <Enter> in the middle
+of a line should preserve whitespace.
 
 ------------------------------------------------------------------------------
 Movement by screen lines
@@ -2662,32 +3566,32 @@ Emacs-style command-line editing
 The standard Emacs-style command-line editing keys as used in Bash have been
 mapped for command-line mode.  These include:
 
-<C-A>   Start of line
-<C-B>   Move left one character
-<C-D>   Delete character under cursor
-<C-F>   Move right one character
-<C-N>   Next command history line
-<C-P>   Previous command history line
+<C-a>   Start of line
+<C-b>   Move left one character
+<C-d>   Delete character under cursor
+<C-f>   Move right one character
+<C-n>   Next command history line
+<C-p>   Previous command history line
 <M-b>   Move left one word
 <M-f>   Move right one word
 
-<C-G>   Edit command-line history (used to be <C-F>)
+<C-g>   Edit command-line history (used to be <C-f>)
 
-The original meanings for these keys may be activated by first pressing <C-O>
+The original meanings for these keys may be activated by first pressing <C-o>
 (mnemonic: "Original").
 
 Original meanings:
-<C-A>   Insert all matching filenames
-<C-B>   <Home>
-<C-D>   List matching names
-<C-F>   Edit command-line history
-<C-G>   Nothing
-<C-N>   Next match after wildchar, or recall next command-line history
-<C-O>   Nothing
-<C-P>   Prev. match after wildchar, or recall prev. command-line history
+<C-a>   Insert all matching filenames
+<C-b>   <Home>
+<C-d>   List matching names
+<C-f>   Edit command-line history
+<C-g>   Nothing
+<C-n>   Next match after wildchar, or recall next command-line history
+<C-o>   Nothing
+<C-p>   Prev. match after wildchar, or recall prev. command-line history
 
 ------------------------------------------------------------------------------
-Windows-style clipboard support
+Clipboard support
 
 Because the Windows standard keys for clipboard support are already taken in
 Vim, they have been mapped to the same keys using Alt:
@@ -2701,8 +3605,29 @@ Vim, they have been mapped to the same keys using Alt:
 In addition, old-style mappings exist:
 
 <S-Insert>    Paste from clipboard
-<C-S-Insert>  Paste from primary X selection
-<C-Insert>    Copy to clipboard
+<C-S-Insert>  Paste from X11 primary selection
+<C-Insert>    Copy to clipboard and X11 primary selection
+
+For ease of use and mnemonic value, the "undo" functionality is also
+available as <M-u><M-u>.
+
+All of these mappings are available in Normal, Visual, and Insert modes.
+
+In addition, the "unnamed" register (which is the default source for "puts"
+and the default destination for "yanks") has been configured to use the
+system clipboard by default for puts, and to use both the system clipboard
+and the X11 primary selection as the destination for yanks.  This provides
+smoother integration with the bulk of applications that use the system
+clipboard.  To put from the primary selection, either use <C-S-Insert> or
+reference the "*" register explicitly, e.g.: >
+
+  "*p
+
+Note that registers can be set via :let, which allows for moving one register
+into another easily.  For example, to move the contents of the clipboard into
+the primary selection, use: >
+
+  let @*=@+
 
 ------------------------------------------------------------------------------
 Putting most-recently-yanked text
@@ -2724,17 +3649,93 @@ To make this easier, a visual mode mapping of capital P performs a put from
 register 0.  This allows a yank followed by repeated selections and puts.
 
 ------------------------------------------------------------------------------
-Search for word under cursor
+Yank-related mappings
+
+Normal-mode "Y" has been remapped to mean "yank to end of line" (equivalent to
+"y$"), for consistency with most other uppercase variants (e.g., "D", "C", ...).
+To yank a single line, use "yy".
+
+Visual-mode "Y" performs a yank-and-dedent operation on the selected text, where
+the largest common whitespace prefix is removed from all lines.  For now, the
+destination register is hard-coded to be "0 (along with both clipboard-related
+registers "+ and "*).  This is convenient when yanking shell commands to be
+pasted into a terminal.
+
+------------------------------------------------------------------------------
+Search-related customizations
 
 Vim's standard "*" operator (which searches for the word under the cursor) has
 been modified to leave the cursor unmoved.  In visual mode, the selection
 becomes the search text.
 
-Use <F3> to begin a :Regrep command on the word under the cursor (or the
-selection in Visual mode).  See :help grep.txt for details on the grep plugin
-and the :Regrep command.
+Use <F3> to begin a :Regrep command on the word under the cursor (in Normal
+mode) or on the current selection (in Visual mode).  See :help grep.txt for
+details on the grep plugin and the :Regrep command.
+
+Ack is a Perl-based search tool that knows how to avoid searching in binary
+files and hidden directories.  It has several features to improve the process of
+searching for text.  The "Ack" plugin provides an interface to the 'ack'
+utility.  Inspired by Ack, the Silver Searcher ('ag') is a similar tool coded in
+"C" for speed.  The "Ag" plugin is a direct port of the "Ack" plugin.
+The "Ack" utility may be invoked explicitly using :Ack, and the Silver Searcher
+may be invoked via ":Ag".
+
+Generally, the Silver Searcher is preferred for speed.  When it is not
+available, Ack is a good alternative.  The custom command |:G| (see below)
+abstracts this choice for you, choosing the best option available on your
+system.
+
+In addition, "#" is mapped to search for the word under the cursor (in Normal
+mode) or the current selection (in Visual mode) using :Ag! (when available) or
+:Ack! (otherwise).
 
 Use the mapping \z after a search to fold all but the matching lines.
+
+------------------------------------------------------------------------------
+findx-related commands
+
+The external findx utility may be invoked using any of the below commands: >
+
+  :Findx <args>           Invoke ``findx``
+  :FFX <args>             Invoke ``ffx`` (a.k.a. ``findx -ffx``)
+  :FFG <args>             Invoke ``ffg`` (a.k.a. ``findx -ffg``)
+
+------------------------------------------------------------------------------
+:G 'search pattern'                                   *:G*   *notes_G*
+
+Depending on your environment, you may not have :Ag available, but if you have
+Perl installed, you will at least be able to use :Ack via the single-file
+implementation bundled with vimfiles.  Because :Ag and :Ack are so similar, in
+most cases you don't have to care which one gets called.  The custom command :G
+is provided to abstract this choice for you.  When the Silver Searcher is
+installed, :G is equivalent to :Ag!  (with the exclamation point to avoid
+jumping to the first match); when that tool is unavailable, :G falls back to
+:Ack! to use the portable 'ack' tool embedded within vimfiles.
+
+For all of these tools (:Ack, :Ag, and :G), the command line is passed directly
+to the shell, and the syntax you must use depends on the details of your
+environment.
+
+For Unix-like systems, it's best to use single-quotes around the entire regular
+expression.  Single-quotes within the regular expression should be handled by
+closing the quotes, escaping a single-quote with a backslash, then re-opening
+the quotes.  For example, to quote this string:
+
+  I'm here
+
+Replace the apostrophe with the four characters '\'' and surround the entire
+expression with single-quotes like this:
+
+  'I'\''m here'
+
+For Windows, surround the pattern with double-quotes, and double any
+double-quotes embedded within the pattern.  For example, to quote this string:
+
+  I said "That's painful" in my loudest voice.
+
+Use the following:
+
+  "I said ""That's painful"" in my loudest voice."
 
 ------------------------------------------------------------------------------
 Pasting lines into Vim
@@ -2790,33 +3791,42 @@ Usage:
 :L4         Layout windows in a four-column format.
 :L5         Layout windows in a five-column format.
 
-Performs the following:
-- Sets number of character columns for the requested number of window
-  columns, e.g.:
-  - :L1  ==> 80 characters
-  - :L2  ==> 161 characters (2 * 80 + 1)
-  - :L3  ==> 242 characters (3 * 80 + 2)
-  - :L4  ==> 323 characters (4 * 80 + 3)
-  - :L5  ==> 404 characters (5 * 80 + 4)
-  - :L n ==> n * 80 + (n - 1)
+The bare :L command will not change the overall number of columns; the rest will
+set the overall number of columns to the value needed to provide <n> vertically
+split windows side-by-side, as determined by the function GetWindowWidth() (see
+the definition in the vimrc file).
 
-  This leaves room for n windows with (n - 1) dividing lines between them.
-
-- Moves current window to the top (L1 only).
-- Moves quickfix window to the bottom and set to standard size (if already open).
-- Makes all windows equally sized (via Ctrl-w_=).
+Within the overall number of columns, :L and friends adjust the windows as
+follows:
+- Move current window to the top (L1 only).
+- Move quickfix window to the bottom and set to standard size (if already open).
+- Make all windows equally sized (via Ctrl-w_=).
 
 *NOTE* If your Gvim window isn't positioned to span the edges of your monitor,
 the number of character columns may be truncated to keep Gvim on a single
 monitor.  To work around this, move Gvim to straddle the boundary between
 monitors before executing the above commands.
 
-<C-Q><C-L>  Toggle the Location window on or off
-<C-Q><C-Q>  Toggle the QuickFix window on or off
+With w = GetWindowWidth(), the overall number of columns is calculated as:
+- :L1  ==> w
+- :L2  ==> (2 * w + 1)
+- :L3  ==> (3 * w + 2)
+- :L4  ==> (4 * w + 3)
+- :L5  ==> (5 * w + 4)
+- :L n ==> (n * w + (n - 1))
 
-NOTE See |notes_tips_xon_xoff| if <C-Q> doesn't work in console vim.
+This leaves room for n windows with (n - 1) dividing lines between them.
 
-The default heights of Location Windows and the QuickFix Window may be
+GetWindowWidth() calculates the desired window width as follows:
+- Start with a based value of g:WindowWidth (defaults to 80);
+- Unconditionally add in g:ExtraWindowWidth (allows extra room for :sign
+  columns; defaults to 2);
+- If any window is in diff mode, add two more columns for the diff indicators;
+- If any window has line numbering turned on (via 'number' or 'relativenumber'),
+  add enough space for the largest value across all windows, but no smaller
+  than 'numberwidth'.
+
+The standard heights of Location Windows and the QuickFix Window may be
 controlled by the following global variables: >
 
   " Desired height of a Location List window.
@@ -2824,6 +3834,14 @@ controlled by the following global variables: >
 
   " Desired height of QuickFix window.
   let g:QuickFixWinHeight = 10
+
+------------------------------------------------------------------------------
+QuickFix and Location Window
+
+<C-q><C-l>  Toggle the Location window on or off
+<C-q><C-q>  Toggle the QuickFix window on or off
+
+NOTE See |notes_tips_xon_xoff| if <C-q> doesn't work in console vim.
 
 ------------------------------------------------------------------------------
 Alternatives to :bufdo, :windo, :tabdo
@@ -2843,17 +3861,52 @@ Highlight command
 The custom command :Highlight provides highlighting of non-conforming coding
 styles to make it easier to locate problems during editing.
 
-Highlights tabs, long lines, etc.: >
-    :Highlight *          ; enable all
-    :Highlight no*        ; disable all
-    :Highlight <Tab>      ; command-line completion to show all options
+Highlighting is done on a per-buffer basis via Vim's syntax highlighting
+mechanism.  Individual syntax items for a single buffer are enabled or disabled
+via the :Highlight command:
 
-Options include: >
+    :Highlight tabs         ; enable highlighting of tab characters
+    :Highlight notabs       ; disable highlighting of tab characters
+    :Highlight longlines    ; enable highlighting of long lines
+    :Highlight nolonglines  ; disable highlighting of long lines
+    :Highlight *            ; enable all supported highlight items
+    :Highlight no*          ; disable all supported highlight items
+    :Highlight <Tab>        ; command-line completion to show all options
+
+:Highlight options include: >
     commas
     keywordspace
     longlines
     tabs
     trailingspace
+
+In addition, highlighting may be enabled or disabled on a per-buffer basis via
+the following commands:
+
+    :HighlightOn        ; enable highlighting of previously enabled items
+    :HighlightOff       ; disable highlighting of all items
+
+The highlight items that were individually configured via the :Highlight
+command are remembered, such that :HighlightOn restores the configuration.
+
+The default disposition of highlighting is controlled by the global variable
+g:HighlightEnabled.  This is set to 1 in the vimrc, but it may be overridden in
+a vimrc-after file to cause highlighting to be disabled by default.  In this
+way, it's convenient to allow individually configured highlighting items to be
+set by the main vimrc, but have them be inactive by default (by setting
+g:HighlightEnabled to 0), such that :HighlightOn will turn on the recommended
+set of highlight items.  For this reason, it's not recommended to have
+":Highlight no*" in your configuration.
+
+------------------------------------------------------------------------------
+colorcolumn (highlighting first column in right margin)
+
+Where supported, Vim's 'colorcolumn' feature will be enabled and set to create
+an indicator of the right margin.  A vertical line indicates the first column
+outside 'textwidth' (when 'textwidth' is non-zero).  To disable this feature,
+place the following in |VIMRC_AFTER|: >
+
+  :set colorcolumn=
 
 ------------------------------------------------------------------------------
 Help-related mappings
@@ -2861,12 +3914,12 @@ Help-related mappings
 The following normal-mode mappings toggle the help window on and off:
 
   <F1>
-  <C-Q><C-H>
-  <C-Q>h
+  <C-q><C-h>
+  <C-q>h
 
 In visual mode, these same keys perform :help on the selected text.
 
-NOTE See |notes_tips_xon_xoff| if <C-Q> doesn't work in console vim.
+NOTE See |notes_tips_xon_xoff| if <C-q> doesn't work in console vim.
 
 If the help window is already open, it will be closed; otherwise, the most
 recent help file will be re-opened.
@@ -2878,24 +3931,182 @@ To fold away lines that match a regex, use the custom command :Fold: >
     :Fold regex         ; lines matching regex are hidden
     :Fold               ; use last search pattern (@/) for regex
 
-Use the custom command :Foldsearch to search for lines matching a regex and
+Use the custom command :FoldSearch to search for lines matching a regex and
 fold away everything else: >
-    :Foldsearch regex   ; show lines matching regex, and fold away all else
-    :Foldsearch         ; use last search pattern (@/) for regex
+    :FoldSearch regex   ; show lines matching regex, and fold away all else
+    :FoldSearch         ; use last search pattern (@/) for regex
 
-With :Foldsearch, increasing the 'foldlevel' to 1 will show one line of
+With :FoldSearch, increasing the 'foldlevel' to 1 will show one line of
 context around all matches.
 
 To fold away comments and blank lines, use this custom command: >
-    :Foldcomments
+    :FoldComments
+
+------------------------------------------------------------------------------
+QuickFix entry folding
+
+To group lines of QuickFix output together by files or by directories, use one
+of the following commands when a QuickFix or Location List window is focused:
+
+                                  *FoldQuickFixFiles*
+                                  *FoldQuickFixDirs*
+    :[count] FoldQuickFixFiles
+    :[count] FoldQuickFixDirs
+
+When [count] is 0 (the default), the folds will start closed; when [count] is 1,
+the folds will start open.
+
+When a QuickFix or Location List window is opened, :1FoldQuickFixFiles is
+applied by :SetupQuickFix, such that the folds start open.  Use standard Vim
+shortcut keys within the QuickFix or Location List window to change folding
+levels:
+
+    zr    Reduce amount of folding
+    zR    Reduce amount of folding fully (no folding remaining)
+    zm    More folding
+    zM    More folding (fully folded)
+    zo    Open a fold
+    zc    Close a fold
+
+In Gvim, you may also click on the symbols in the left margin of the QuickFix
+or Location List window to toggle individual folds.
 
 ------------------------------------------------------------------------------
 Converting Unicode symbols to ASCII
 
-Use :Toascii to convert a range of lines (defaulting to the entire buffer)
+Use :ToAscii to convert a range of lines (defaulting to the entire buffer)
 into ASCII.  Mainly this converts several kinds of quotes into ASCII quotes
 and generally maps some of the Unicode symbols in the range U+2000 through
 U+206F into ASCII equivalents.
+
+------------------------------------------------------------------------------
+Converting identifer case (e.g, lowerMixedCase to underscore_separated)
+                                  *notes_identifier_case*
+
+Several conventions exist for multi-word variable names, e.g.::
+
+  lowerMixedCase                  (a.k.a. mixedCase or lowerCamelCase)
+  UpperMixedCase                  (a.k.a. CamelCase or upperCamelCase)
+  underscore_separated_lowercase  (a.k.a. snake_case)
+
+In support of finding and converting variables of various naming conventions,
+the following features are provided.
+
+                                  *SearchLmc* *SearchUmc* *SearchUnderscore*
+:SearchLmc
+:SearchUmc
+:SearchUnderscore
+        Set Vim's search expression to match lowerMixedCase, UpperMixedCase,
+        or underscore_separated_lowercase identifiers.
+
+                                  *SearchWord*
+:SearchWord [ident]*
+        Set Vim's search expression to match all provided identiers; if none are
+        provided, set the search expression to WordPattern() to match all
+        identifiers.
+
+        E.g., to search for identOne and identTwo:
+
+          :SearchWord identOne identTwo
+
+                                  *GrepLmc* *GrepUmc* *GrepUnderscore*
+:GrepLmc args-for-G-command
+:GrepUmc args-for-G-command
+:GrepUnderscore args-for-G-command
+        This wraps the :G command, providing a Perl-compatible regular
+        expression matching lowerMixedCase, UpperMixedCase, or
+        underscore_separated identifiers as the implied first
+        argument to :G.  It is logically equivalent to:
+          :G <perl-regex-for-identifier-type> args-for-G-command
+
+        Also sets Vim's search expression for highlighting of matched
+        identifiers.
+
+                                  *ToUnderscore* *ToUmc* *ToLmc*
+:ToUnderscore [ident]*
+:ToUmc [ident]*
+:ToLmc [ident]*
+        These commands convert the provided identifiers to the corresponding
+        convention in the current buffer using :s///.  If no identifiers are
+        provided, the identifier under the cursor is used.  These commands
+        accept a range, which defaults to the entire file.
+
+        Examples:
+
+        " Convert identOne and identTwo to ident_one and ident_two.
+        :ToUnderscore identOne identTwo
+
+        " Convert some_name to SomeName in lines 1 through 100.
+        :1,100ToUmc some_name
+
+        " Convert identifier under cursor to lowerMixedCase in entire file.
+        :ToLmc
+
+                                  *LmcToUnderscore*
+:LmcToUnderscore
+        Similar to :ToUnderscore, but uses a regular expression to match all
+        lowerMixedCase identifiers.  This is helpful for converting Python
+        multiWordVariables to multi_word_variables.
+
+                                  *SearchLmcPattern()* *SearchUmcPattern()*
+                                  *SearchUnderscorePattern()*
+SearchLmcPattern()
+SearchUmcPattern()
+SearchUnderscorePattern()
+        These functions return Vim regular expressions to match lowerMixedCase,
+        UpperMixedCase, and underscore_separated_lowercase identifiers,
+        respectively.  They may be useful for use with the '/' command and
+        |c_CTRL-R_=| to get hold of the regular expression for further editing.
+        For example, pressing the following keys in order will perform a search
+        for lowerMixedCase identifiers:
+
+          /<C-R>=SearchLmcPattern()<CR>
+
+                                  *GrepLmcPattern()* *GrepUmcPattern()*
+                                  *GrepUnderscorePattern()*
+GrepLmcPattern()
+GrepUmcPattern()
+GrepUnderscorePattern()
+        These functions return Perl-compatible regular expressions to match
+        lowerMixedCase, UpperMixedCase, and underscore_separated_lowercase
+        identifiers, respectively.  They may be useful to create customized
+        :G commands.  For example, an :GrepLmc operation in the ~/tmp directory
+        can be simulated by pressing the following keys:
+
+          :G <C-R>=GrepLmcPattern()<CR> ~/tmp<CR>
+
+                                  *Underscore* *Umc* *Lmc*
+Underscore()
+Underscore(word)
+Umc()
+Umc(word)
+Lmc()
+Lmc(word)
+        Convert word to specified convention.  If word is not supplied, use
+        submatch(0) instead, which represent the entire matched text within
+        a :s/// command.
+
+        These functions are convenient when constructing a custom substitute
+        command.  For example, pressing "*" on an identifier under the cursor
+        will set the current search expression to match that word.  To convert
+        that word to the underscore_separated_lowercase convention, re-use the
+        search expression by leaving the pattern blank and use Vim's
+        |sub-replace-expression| feature to convert submatch(0) using the Umc()
+        function:
+
+          :%s//\=Underscore()/g
+
+Some refactoring mappings exist to rename the identifier under the cursor to a
+new convention across the entire file:
+
+  <M-r>iu     Refactor identifier to underscore_separated_lowercase
+  <M-r>iU     Refactor identifier to UpperMixedCase
+  <M-r>il     Refactor identifier to lowerMixedCase
+
+This may help after a bulk :LmcToUnderscore operation.  Using <Leader>sv on a
+file will show the diffs against the most recent comment in source control (see
+|notes_vcscommand| for details).  If an identifier was converted erroneously, it
+may be converted back via <M-r>il.
 
 ------------------------------------------------------------------------------
 Conflict marker navigation
@@ -2917,6 +4128,17 @@ the list of languages that will include syntax highlighting in the
 "code-block" directive.  Markdown will default to the same set of languages
 as reStructuredText by default.  You can set "g:markdownEmbeddedLangs" to a
 different list, if you desire.
+
+------------------------------------------------------------------------------
+Source control integration
+
+During a Git rebase operation, the following additional mappings are available:
+
+<Leader><Leader>e Change rebase action to "edit"
+<Leader><Leader>f Change rebase action to "fixup"
+<Leader><Leader>p Change rebase action to "pick"
+<Leader><Leader>r Change rebase action to "reword"
+<Leader><Leader>s Change rebase action to "squash"
 
 ==============================================================================
 6.  Tips                                                *notes_tips*
@@ -2950,14 +4172,14 @@ Command-line window
 
 Special window for editing current and historical command and searches.
 
-From command-line mode or while editing a search pattern, press CTRL-G to open
-the window (Note: Vim default is to use CTRL-F, but this has been remapped).
+From command-line mode or while editing a search pattern, press CTRL-g to open
+the window (Note: Vim default is to use CTRL-f, but this has been remapped).
 
 From normal mode, press "q:" or "q/" to open the command-history or
 search-history window, respectively.
 
 You can edit, cut, paste, yank, etc., from these history windows.  Press
-CTRL-C to exit.
+CTRL-c to exit.
 
 Press <CR> on a line in the window to execute it.
 
@@ -3017,13 +4239,13 @@ So the above example becomes: >
     :Redir
 
 ------------------------------------------------------------------------------
-Using <C-Q> and <C-S> in console Vim                    *notes_tips_xon_xoff*
+Using <C-q> and <C-s> in console Vim                    *notes_tips_xon_xoff*
 
-When using console Vim, <C-Q> and <C-S> are often trapped by the console
+When using console Vim, <C-q> and <C-s> are often trapped by the console
 (they're the standard ASCII XON and XOFF characters).  To allow them to be
 seen by console Vim on Linux, try the following in your ~/.bashrc: >
 
-  # Disable XON/XOFF so CTRL-Q and CTRL-S are available to Vim and friends
+  # Disable XON/XOFF so CTRL-q and CTRL-s are available to Vim and friends
   # when stdout is connected to a terminal.
   test -t 0 && stty -ixon -ixoff
 

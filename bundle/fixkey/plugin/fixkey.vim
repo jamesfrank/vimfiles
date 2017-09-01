@@ -18,7 +18,7 @@ set cpoptions&vim
 
 " Ensure keycode timeouts are enabled.
 if &ttimeoutlen < 0
-    set ttimeoutlen=50
+    set ttimeoutlen=5
 endif
 
 function! Fixkey_setKey(key, keyCode)
@@ -102,35 +102,18 @@ function! Fixkey_unsetFunctionKeys()
     endwhile
 endfunction
 
-function! Fixkey_setVt100ExtraF1toF4()
-    call Fixkey_setKey("<xF1>", "\eO*P")
-    call Fixkey_setKey("<xF2>", "\eO*Q")
-    call Fixkey_setKey("<xF3>", "\eO*R")
-    call Fixkey_setKey("<xF4>", "\eO*S")
-endfunction
-
-function! Fixkey_setVt100ExtraHomeEnd()
-    call Fixkey_setKey("<xHome>", "\eO*H")
-    call Fixkey_setKey("<xEnd>",  "\eO*F")
-endfunction
-
-function! Fixkey_setVt100ExtraArrows()
-    " Oddly, Vim sets <Up> to \eO*A and <xUp> to \e[1;*A, which seems
-    " backward compared to <F1>=\e[1;*P and <xF1>=\eO*P.  This seems
-    " to cause trouble with Konsole's use of these arrow keys.  Switching
-    " to the vt100-compatible keycodes on <xArrows> allows Konsole
-    " to use these codes directly.
-    call Fixkey_setKey("<xUp>",    "\eO*A")
-    call Fixkey_setKey("<xDown>",  "\eO*B")
-    call Fixkey_setKey("<xLeft>",  "\eO*D")
-    call Fixkey_setKey("<xRight>", "\eO*C")
-endfunction
-
 function! Fixkey_setXtermF1toF4()
     call Fixkey_setKey("<F1>", "\e[1;*P")
     call Fixkey_setKey("<F2>", "\e[1;*Q")
     call Fixkey_setKey("<F3>", "\e[1;*R")
     call Fixkey_setKey("<F4>", "\e[1;*S")
+endfunction
+
+function! Fixkey_setVt100ExtraF1toF4()
+    call Fixkey_setKey("<xF1>", "\eO*P")
+    call Fixkey_setKey("<xF2>", "\eO*Q")
+    call Fixkey_setKey("<xF3>", "\eO*R")
+    call Fixkey_setKey("<xF4>", "\eO*S")
 endfunction
 
 function! Fixkey_setXtermFunctionKeys()
@@ -146,6 +129,16 @@ function! Fixkey_setXtermFunctionKeys()
     call Fixkey_setKey("<F12>", "\e[24;*~")
 endfunction
 
+function! Fixkey_setXtermHomeEnd()
+    call Fixkey_setKey("<Home>",  "\e[1;*H")
+    call Fixkey_setKey("<End>",   "\e[1;*F")
+endfunction
+
+function! Fixkey_setVt100ExtraHomeEnd()
+    call Fixkey_setKey("<xHome>", "\eO*H")
+    call Fixkey_setKey("<xEnd>",  "\eO*F")
+endfunction
+
 function! Fixkey_setXtermArrows()
     call Fixkey_setKey("<Up>",     "\e[1;*A")
     call Fixkey_setKey("<Down>",   "\e[1;*B")
@@ -153,29 +146,42 @@ function! Fixkey_setXtermArrows()
     call Fixkey_setKey("<Right>",  "\e[1;*C")
 endfunction
 
-function! Fixkey_setXtermHomeEnd()
-    call Fixkey_setKey("<Home>",  "\e[1;*H")
-    call Fixkey_setKey("<End>",   "\e[1;*F")
+function! Fixkey_setVt100ExtraArrows()
+    " Oddly, Vim sets <Up> to \eO*A and <xUp> to \e[1;*A, which seems
+    " backward compared to <F1>=\e[1;*P and <xF1>=\eO*P.  This seems
+    " to cause trouble with Konsole's use of these arrow keys.  Switching
+    " to the vt100-compatible keycodes on <xArrows> allows Konsole
+    " to use these codes directly.
+    call Fixkey_setKey("<xUp>",    "\eO*A")
+    call Fixkey_setKey("<xDown>",  "\eO*B")
+    call Fixkey_setKey("<xLeft>",  "\eO*D")
+    call Fixkey_setKey("<xRight>", "\eO*C")
+endfunction
+
+function! Fixkey_setXtermNavigationKeys()
+    call Fixkey_setXtermHomeEnd()
+    call Fixkey_setVt100ExtraHomeEnd()
+    call Fixkey_setXtermArrows()
+    call Fixkey_setVt100ExtraArrows()
 endfunction
 
 function! Fixkey_setXtermKeys()
     let g:Fixkey_termType = "xterm"
     call Fixkey_setMetaLetters()
-    call Fixkey_setXtermF1toF4()
+    call Fixkey_setXtermFunctionKeys()
+    call Fixkey_setXtermNavigationKeys()
 
-    " konsole.
+    " In case this is actually konsole:
     call Fixkey_setNewKey("<S-Enter>", "\eOM")
-    " xterm, konsole.
+    " For both xterm and konsole.
     call Fixkey_setKey("<M-Enter>", "\e\r")
 endfunction
 
 function! Fixkey_setGnomeTerminalKeys()
     let g:Fixkey_termType = "gnome"
     call Fixkey_setMetaLetters()
-    call Fixkey_setKey("<F1>", "\eO1;*P")
-    call Fixkey_setKey("<F2>", "\eO1;*Q")
-    call Fixkey_setKey("<F3>", "\eO1;*R")
-    call Fixkey_setKey("<F4>", "\eO1;*S")
+    call Fixkey_setXtermFunctionKeys()
+    call Fixkey_setXtermNavigationKeys()
     " Can't get this to work:
     " call Fixkey_setKey("<M-Enter>", "\e\r")
 endfunction
@@ -184,8 +190,7 @@ function! Fixkey_setKonsoleKeys()
     let g:Fixkey_termType = "konsole"
     call Fixkey_setMetaLetters()
     call Fixkey_setXtermFunctionKeys()
-    call Fixkey_setXtermArrows()
-    call Fixkey_setVt100ExtraArrows()
+    call Fixkey_setXtermNavigationKeys()
     call Fixkey_setNewKey("<S-Enter>", "\eOM")
     call Fixkey_setKey("<M-Enter>", "\e\r")
 endfunction
@@ -309,6 +314,21 @@ function! Fixkey_setPuttyKeys()
     call Fixkey_setKey("<M-Enter>", "\e\r")
 endfunction
 
+function! Fixkey_setPuttyScoF1toF12()
+    call Fixkey_setKey("<F1>",  "\e[M")
+    call Fixkey_setKey("<F2>",  "\e[N")
+    call Fixkey_setKey("<F3>",  "\e[O")
+    call Fixkey_setKey("<F4>",  "\e[P")
+    call Fixkey_setKey("<F5>",  "\e[Q")
+    call Fixkey_setKey("<F6>",  "\e[R")
+    call Fixkey_setKey("<F7>",  "\e[S")
+    call Fixkey_setKey("<F8>",  "\e[T")
+    call Fixkey_setKey("<F9>",  "\e[U")
+    call Fixkey_setKey("<F10>", "\e[V")
+    call Fixkey_setKey("<F11>", "\e[W")
+    call Fixkey_setKey("<F12>", "\e[X")
+endfunction
+
 function! Fixkey_setPuttyScoShiftF1toF12()
     call Fixkey_setNewKey("<S-F1>",  "\e[Y")
     call Fixkey_setNewKey("<S-F2>",  "\e[Z")
@@ -378,6 +398,7 @@ function! Fixkey_setPuttyScoKeys()
     let g:Fixkey_termType = "putty-sco"
     call Fixkey_unsetFunctionKeys()
     call Fixkey_setMetaLetters()
+    call Fixkey_setPuttyScoF1toF12()
     call Fixkey_setPuttyScoShiftF1toF12()
     call Fixkey_setPuttyScoCtrlF1toF12()
     " Not working yet (seems like too many "setNewKey" calls):
@@ -529,8 +550,7 @@ function! Fixkey_setScreenExtraHomeEnd()
     call Fixkey_setKey("<xEnd>", "\e[4~")
 endfunction
 
-function! Fixkey_setScreenKeys()
-    let g:Fixkey_termType = "screen"
+function! Fixkey_setScreenCompatibleKeys()
     call Fixkey_setMetaLetters()
     call Fixkey_setXtermFunctionKeys()
     call Fixkey_setXtermHomeEnd()
@@ -540,6 +560,16 @@ function! Fixkey_setScreenKeys()
     call Fixkey_setKey("<M-Enter>", "\e\r")
     " <S-Enter> works when hosted under konsole.
     call Fixkey_setNewKey("<S-Enter>", "\eOM")
+endfunction
+
+function! Fixkey_setScreenKeys()
+    let g:Fixkey_termType = "screen"
+    call Fixkey_setScreenCompatibleKeys()
+endfunction
+
+function! Fixkey_setTmuxKeys()
+    let g:Fixkey_termType = "tmux"
+    call Fixkey_setScreenCompatibleKeys()
 endfunction
 
 if $TERM =~# '^xterm\(-\d*color\)\?$'
@@ -567,8 +597,17 @@ elseif $TERM =~# '^putty\(-\d*color\)\?$'
 elseif $TERM =~# '^rxvt\(-unicode\)\?\(-\d*color\)\?$'
     call Fixkey_setRxvtKeys()
 
-elseif $TERM =~# '^screen\(-\d*color\)\?\(-bce\)\?\(-s\)\?$'
+elseif $TERM =~# '\v^screen(-\d*color|-bce|-it|-s)*$'
     call Fixkey_setScreenKeys()
+
+elseif $TERM =~# '\v^tmux(-\d*color|-bce|-it|-s)*$'
+    call Fixkey_setTmuxKeys()
+
+    " When TERM begins with "screen", Vim helpfully sets 'ttymouse' to "xterm".
+    " This same logic is required for tmux to work correctly, but Vim currently
+    " lacks support for it.  As a work-around for this problem, we ensure
+    " 'ttymouse' is set correctly below.
+    set ttymouse=xterm
 
 else
     let g:Fixkey_termType = "unknown"

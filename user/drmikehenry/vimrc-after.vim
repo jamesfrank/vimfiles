@@ -1,8 +1,3 @@
-" Turn off GUI menu and scrollbars; keep these:
-" - e: use GUI tab pages.
-" - i: use an icon for the GUI.
-set guioptions=ei
-
 function! CustomSetupMake()
     call SetupMake()
 
@@ -15,3 +10,18 @@ function! CustomSetupMake()
     setlocal et sw=2 sts=2
 endfunction
 command! -bar SetupMake call CustomSetupMake()
+
+nnoremap <Space>bb          :<C-u>CtrlPBuffer<CR>
+nnoremap <Space>bd          :BW<CR>
+
+nnoremap <Space>wc          <C-w>c
+nnoremap <Space>ww          <C-w>w
+
+nnoremap <Space>ff          :<C-u>CtrlPCurFile<CR>
+nnoremap <Space>pf          :<C-u>CtrlPRoot<CR>
+
+Noxmap   <Space>xdw         :StripTrailingWhitespace<CR>
+
+" Use cpsm matcher for CtrlP.
+let g:ctrlp_match_func = {'match': 'cpsm#CtrlPMatch'}
+let g:cpsm_query_inverting_delimiter = ' '

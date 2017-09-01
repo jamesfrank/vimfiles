@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 # Copyright (C) 2013 John Szakmeister <john@szakmeister.net>
 # All rights reserved.
@@ -10,11 +10,25 @@ import sys
 import re
 
 
-__version__ = '0.1.1'
+__version__ = '0.1.5'
 
 
 class ScriptError(Exception):
     pass
+
+
+def ctagNameEscape(str):
+    str = re.sub('[\t\r\n]+', ' ', str)
+    str = re.sub(r'^\s*\\\((.)\)', r'(\1)', str)
+    return str
+
+
+def ctagSearchEscape(str):
+    str = str.replace('\t', r'\t')
+    str = str.replace('\r', r'\r')
+    str = str.replace('\n', r'\n')
+    str = str.replace('\\', r'\\')
+    return str
 
 
 class Tag(object):
@@ -40,24 +54,29 @@ class Tag(object):
         return '\t'.join(formattedFields)
 
     def __str__(self):
-        return '%s\t%s\t%s;"\t%s' % (
-                self.tagName, self.tagFile, self.tagAddress,
-                self._formatFields())
+        tag = '%s\t%s\t%s;"\t%s' % (
+            self.tagName, self.tagFile, self.tagAddress,
+            self._formatFields())
+        if isinstance(tag, unicode):
+            return tag.encode('utf-8')
+        else:
+            return tag
 
     def __cmp__(self, other):
         return cmp(str(self), str(other))
 
     @staticmethod
     def section(section):
-        tagAddress = '/^%s$/' % section.line
-        t = Tag(section.name, section.filename, tagAddress)
+        tagName = ctagNameEscape(section.name)
+        tagAddress = '/^%s$/' % ctagSearchEscape(section.line)
+        t = Tag(tagName, section.filename, tagAddress)
         t.addField('kind', 's')
         t.addField('line', section.lineNumber)
 
         parents = []
         p = section.parent
         while p is not None:
-            parents.append(p.name)
+            parents.append(ctagNameEscape(p.name))
             p = p.parent
         parents.reverse()
 
@@ -80,7 +99,7 @@ class Section(object):
         return '<Section %s %d %d>' % (self.name, self.level, self.lineNumber)
 
 
-headingRe = re.compile(r'^[-=^"#*.]+$')
+headingRe = re.compile(r'''^([-=~:^"#*._+`'])\1+$''')
 subjectRe = re.compile(r'^[^\s]+.*$')
 
 def findSections(filename, lines):
@@ -198,8 +217,18 @@ def main():
 
     for filename in args:
         f = open(filename, 'rb')
-        lines = f.read().splitlines()
+        buf = f.read()
+
+        try:
+            buf = buf.decode('utf-8')
+        except UnicodeDecodeError:
+            pass
+
+        lines = buf.splitlines()
+
         f.close()
+        del buf
+
         sections = findSections(filename, lines)
 
         genTagsFile(output, sectionsToTags(sections), sort=options.sort)

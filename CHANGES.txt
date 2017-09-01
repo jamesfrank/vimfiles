@@ -7,6 +7,1295 @@ Significant changes to vimfiles (newest changes first).
 Changes marked with "BREAKING CHANGE" indicate an incompatible change that may
 require adjustment of per-user settings.
 
+2017-08-24
+==========
+
+- Update the IsQuickFixWin() function to work with Vim 8.0 (thanks for John
+  Szakmeister).
+
+2017-06-28
+==========
+
+- Update airline to v2017-05-08 (thanks to John Szakmeister).
+
+2017-03-01
+==========
+
+- Update markdown2ctags to v0.1.3 (thanks to John Szakmeister).  This fixes a
+  bug when nesting sections that were more than one-level apart from the current
+  section (putting h4's in h2's).
+
+2017-01-14
+==========
+
+- Fix visual-mode ``Y`` mapping to handle blank lines.  ``Y`` maps to
+  DedentParagraph() which removes common prefixes of whitespace from the
+  selected lines before yanking.  This function now ignores empty lines when
+  computing the common whitespace prefix.
+
+2017-01-01
+==========
+
+- Add notes for building on Fedora 23+.  As of Fedora 23, all RPMs are
+  "hardened" by default.  When building with ``--enable-rubyinterp``, Vim
+  uses hardened linker settings provided by the Fedora-supplied ruby libraries
+  without using the necessary hardened compiler settings, causing the
+  ``./configure`` operation to fail.
+
+2016-12-23
+==========
+
+- Update togglecursor to version 0.5.1 to support OS X's native Terminal in
+  Sierra or better.
+
+2016-12-02
+==========
+
+- Ctrlp defaults to a maximum 10,000 files which has proved to be insufficient,
+  so the limit has been raised to Jim's suggested value because, as he pointed
+  out, 640K ought to be enough for anyone.
+
+2016-11-15
+==========
+
+- Update fontsize plugin to version 0.4.1 to support GTK3-based GUI.  Change
+  default font setting logic to handle GTK3 as well.
+
+2016-11-11
+==========
+
+- Update the Grepper plugin to version 2016-11-11.  This fixes problems with
+  hanging for certain search tools (ag, ack, rg, ...) that try to detect
+  whether stdin is a pipe, and if so, search the data on stdin.
+
+2016-10-31
+==========
+
+- Allow the Git rebase actions to be repeated with dot (thanks to John
+  Szakmeister).  See the SetupRebaseMappings() function in vimrc for details.
+
+2016-10-30
+==========
+
+- Extend the VIMUSERFILES idea to allow three kinds of override directories.
+  Environment variables now allow these configurable directories (in order of
+  increasing priority):
+
+  - VIMLOCALFILES:      location-specific settings (e.g., for your workgroup)
+  - VIMUSERFILES:       per-user settings usable at all locations
+  - VIMUSERLOCALFILES:  per-user location-specific settings
+
+  See ``:help notes_overrides`` for more details.
+
+2016-10-29
+==========
+
+- Add support for the Rust programming language.
+
+2016-10-23
+==========
+
+- Add simple file completion for :G, :Findx, :FFX, :FFG.
+
+2016-10-10
+==========
+
+- Update rst2ctags to version 0.1.5, which uses python2 in the shebang line and
+  ensures the heading characters are homogeneous (thanks to John Szakmeister).
+
+2016-10-04
+==========
+
+- Upgrade to Fixkey version 0.3.8, which works around a problem with TERM=tmux
+  wherein the <Home> and <End> keys weren't working correctly due to conflicts
+  with Vim's incorrectly detected mouse settings.
+
+2016-10-01
+==========
+
+- Make :Copen and :Lopen always switch to the QuickFix/Location list, even if
+  the window is already open.
+
+- Add Grepper plugin.  ``:help grepper`` for details.  For now, using a forked
+  version with better quoting/escaping.  Implement :Findx, :FFX, :FFG in terms
+  of :Grepper.
+
+- BREAKING CHANGE: Reorganize some search-related functions and commands to make
+  them easier to discover (via ``:Search<tab>``, for example) and to base them
+  on the Grepper plugin::
+
+    :LmcSearch              --> :SearchLmc
+    :UmcSearch              --> :SearchUmc
+    :UnderscoreSearch       --> :UnderscoreUmc
+    :WordSearch             --> :SearchWord
+    :LmcGrep                --> :GrepLmc
+    LmcPattern()            --> SearchLmcPattern()
+    UmcPattern()            --> SearchUmcPattern()
+    UnderscorePattern()     --> SearchUnderscorePattern()
+    :LmcGrepPattern         --> :GrepLmcPattern
+    :UmcGrepPattern         --> :GrepUmcPattern
+    :UnderscoreGrepPattern  --> :GrepUnderscorePattern
+
+  Also add the following::
+
+    :GrepUmc
+    :GrepUnderscore
+
+2016-09-30
+==========
+
+- Mapping <CR> didn't turn out to be convenient enough, so it's no longer mapped
+  to easymotion-s2.
+
+2016-09-18
+==========
+
+- Use "Hack" as the preferred font (if installed).  Most systems don't have it
+  installed by default, so mostly this won't be noticeable unless you've gone
+  out of your way to install Hack.  Notably, Hack includes font patches to
+  support Powerline symbols (used by Airline as well), making Vim's status line
+  look a bit better.
+
+- Remove <Space>l mapping for easymotion-sol-bd-jk, and replace with three
+  mappings beginning with <Space>j ("j" for "jump"):
+
+    <Space>jj          easymotion-s
+    <Space>jJ          easymotion-s2
+    <Space>jl          easymotion-sol-bd-jk
+
+  Also map <CR> to be a more convenient alias for easymotion-s2.
+
+- Add new commands :Findx, :FFG, :FFX to integrate the findx utility.
+
+- Map normal-mode ``Y`` to mean "yank to end of line" (equivalent to ``y$``),
+  for consistency with most other uppercase variants (e.g., ``D``, ``C``, ...).
+  To yank a single line, use ``yy``.
+
+- Map visual-mode "Y" to perform a yank-and-dedent operation on the selected
+  text, where the largest common whitespace prefix is removed from all lines.
+  For now, the destination register is hard-coded to be ``"0`` (along with both
+  clipboard-related registers ``"+`` and ``"*``).  This is convenient when
+  yanking shell commands to be pasted into a terminal.
+
+2016-08-28
+==========
+
+- Use two-space indentation and disable spell checking for YAML files.
+
+- Disable auto-indentation on certain keypresses in YAML files (most importantly
+  for ``:`` and ``#``).
+
+2016-08-22
+==========
+
+- Add better support for Airline fonts (thanks to John Szakmeister).  Redefine
+  the AirlineCustomizeSymbols command in your vimrc-after file to change the
+  airline symbol definitions.
+
+2016-08-21
+==========
+
+- Upgrade incsearch plugin to version 2016-05-06.
+
+- Add incsearch-fuzzy plugin; like incsearch with fuzzy pattern support.
+
+2016-08-16
+==========
+
+- Add some functions in vimrc to help locate script-local symbols
+  (GetSymbol(), GetSID(), GetScript(), ScriptPaths()).
+
+- Add support for JSON files.
+
+2016-06-19
+==========
+
+- Detect ``*.vader`` as Vader test files.
+
+2016-06-5
+=========
+
+- Add Vader plugin version 2016-05-22 for Vim unit testing.
+
+- Port vimrc unit tests to Vader.
+
+- Remove UnitTest plugin (Vader has replaced its function).
+
+2016-05-22
+==========
+
+- Upgrade Fugitive plugin to version 2016-05-11.
+
+- Fix :DiffClose to use new :DiffOff command that understands how to restore
+  Fugitive's diff-restoration logic.  Now 'cursorbind' is no longer left set on
+  Fugitive working-copy windows after :OneWindow command (bound to CTRL-w o).
+
+- Have CtrlP plugin follow symlinks.
+
+2016-05-17
+==========
+
+- Work around Vim prior to 7.4.725 in SetReg() function.  On older Vim, invoking
+  setreg() with an empty list would generate an internal error.
+
+2016-05-15
+==========
+
+- Add experimental support for CtrlP matcher plugins:
+
+  - cpsm::
+
+      let g:ctrlp_match_func = {'match': 'cpsm#CtrlPMatch'}
+      let g:cpsm_query_inverting_delimiter = ' '
+
+  - ctrlp-py-matcher::
+
+      let g:ctrlp_match_func = {'match': 'pymatcher#PyMatch'}
+
+  - ctrlp-cmatcher::
+
+      let g:ctrlp_match_func = {'match' : 'matcher#cmatch'}
+
+  - abbrev-matcher::
+
+      let g:ctrlp_match_func = {'match': 'ctrlp#abbrev_matcher#match'}
+
+  None of these are enabled by default during their evaluation phase.
+
+2016-05-14
+==========
+
+- Upgrade airline to version 2016-05-13 and airline-themes to version
+  2016-05-10.  Airline now supports suppression of empty sections.
+
+- Patch airline to support disabling whitespace checks on a per-buffer basis,
+  and disable these checks for QuickFix windows.
+
+2016-05-11
+==========
+
+- Preserve register "0 (the most recent yank) for ``#`` mapping (which launches
+  a :G operation to search using Ag or Ack).
+
+- Upgrade BufExplorer to version 2016-04-16.
+
+2016-05-10
+==========
+
+- Add new mappings for QuickFix and Location List windows.  See
+  ``:help notes_quickfix_keys`` for details.
+
+2016-05-07
+==========
+
+- Remove mapping of ``svn-prop*.tmp`` to filetype ``svn``.  That filetype is
+  intended only for Subversion commit messages, and it doesn't play well when
+  editing other properites like ``svn:externals`` and ``svn:ignore``.  When
+  using ``svn propset --revprop svn:log ...``, use ``:setf svn`` to turn on
+  the ``svn`` filetype.
+
+2016-05-05
+==========
+
+- Fix missing ``noautocmd`` inside ``IsQuickFixWin()``, which can cause a
+  autocommand recursion issues in some cases.
+
+2016-05-02
+==========
+
+- On <F4>/<s-F4>, leave Quickfix window closed if already closed.
+
+- :Copen/:Lopen now do nothing if the QuickFix/Location List window is already
+  open, which preserves the existing window height.
+
+2016-04-28
+==========
+
+- Add ``pkgexp`` to 'wildignore' setting.
+
+2016-04-26
+==========
+
+- Add filetype support for Scheme (``*.scm``) files.
+
+2016-04-19
+==========
+
+- Use ``:G`` for use with the ``#`` search mapping (rather than boiling it down
+  to either ``:Ack!`` or ``:Ag!``) to allow easier location of previous
+  invocations in the command history.
+
+2016-04-18
+==========
+
+- Update to the new method that UltiSnips uses to disable itself.  Without this
+  change, UltiSnips warns about missing Python integration.
+
+2016-04-12
+==========
+
+- Fix broken logic for disabling airline (thanks to Mike Haig).
+
+2016-03-27
+==========
+
+- Add experimental airline plugin.
+
+2016-03-12
+==========
+
+- Update fixkey to version 0.3.7.  This corrects a problem with Fedora's
+  patched version of Vim, allowing F1 to F4 to work correctly in the
+  terminal.
+
+2016-02-28
+==========
+
+- Update tcomment plugin to version 2016-02-28.
+
+- Update Ultisnips plugin to version 2016-02-13.
+
+- Update Snippets examples to version 2016-02-19.
+
+- Update Bufkill plugin to version 2015-09-24.
+
+- Update Easymotion plugin to version 2016-02-15.
+
+2016-02-24
+==========
+
+- Update quickfix-reflector plugin to version 2015-11-21.  This fixes an issue
+  with modifying long lines in the QuickFix window (around 181 characters long).
+
+2016-02-23
+==========
+
+- Update signature plugin to version 2016-02-21.  This fixes some instances of
+  signs being left behind after deletion of the associated mark.
+
+- Update CtrlP plugin to version 2016-01-17.
+
+- Update bufexplorer plugin to version 2015-10-02.
+
+2016-01-02
+==========
+
+- Update buildtool to pull from Git repository instead of Mercurial.
+
+2015-11-05
+==========
+
+- Update localvimrc to version 2015-10-02 (thanks to John Szakmeister).
+
+2015-10-22
+==========
+
+- Update to vim-fixkey v0.3.6, bringing support for TERM=tmux (for tmux v2.1 and
+  beyond).  Useful for italic support under tmux.
+
+2015-10-04
+==========
+
+- Update to vim-fontsize v0.4.0, bringing the ability to configure the "font
+  mode" time-out value independently from Vim's 'timeout'/'timeoutlen' settings.
+
+2015-09-13
+==========
+
+- Patch Powerline to work around buggy behavior (thanks to John Szakmeister).
+  This fixes a problem where BRANCH and LINE symbols would eventually become
+  ["].
+
+2015-09-08
+==========
+
+- Update vim-session plugin to version 2.13 (thanks to John Szakmeister).  This
+  new version allows persisting of 'guifont' to be disabled.  Now changes to
+  'guifont' in a configuration file will not be overwritten when a session is
+  reloaded.
+
+2015-09-02
+==========
+
+- Update bufkill plugin to version 0.12 (thanks to John Szakmeister).
+
+2015-08-20
+==========
+
+- Update to v0.5.0 of vim-togglecursor (thanks to John Szakmeister).  This adds
+  support for enabling cursor changing under Neovim, VTE3 support, along with
+  better XTerm support. It also allows you to force the particular kind of
+  escape sequence used, if your terminal is not automatically detected.
+
+  Note: the new versios does change the default cursors to be blinking to better
+  match gvim's behavior.
+
+2015-08-08
+==========
+
+- Vim's syntax file for shell scripts has grown a mis-feature of adding "." to
+  'iskeyword'.  This breaks editing expectations for an extremely rare use case
+  in certain dialects of shell script.  We now set "g:sh_noisk" to disable the
+  addition of ".".
+
+- Remove Signature maps that hide valuable Vim built-in functionality for
+  jumping to the start or end of recent yanks or changes::
+
+    '[, '], `[, and `]
+
+  This is done via assignment to g:SignatureMap in vimrc.  To restore this
+  functionality, unlet g:SignatureMap in your vimrc-after.vim file.
+
+- Improve automatic period insertion behavior in snippets like ``@todo``.
+
+2015-08-04
+==========
+
+- Adjust :DiffOrig command to work correctly if the user sets the 'splitright'
+  option (which puts the focus on the rightmost window after a vertical split).
+
+2015-06-20
+==========
+
+- Tighten the regular expression for ignoring Syntastic warnings about unused
+  imports from Python's "future" package; package names must now be found only
+  on word boundaries.
+
+2015-05-31
+==========
+
+- Turn off Syntastic's automatic opening of the Location list.  It causes
+  problems when doing a quick edit on a file with errors, as ``:wq`` causes the
+  Location list to pop up and prevent exiting Vim.  The Location list may always
+  be toggled via CTRL-Q CTRL-L.  Because the Location list is no longer opened
+  automatically, <F4>/<s-F4> have changed to prioritize the use of the Location
+  list when both it and the QuickFix list are closed (or both open); as before,
+  if one list is open and the other is closed, the open window takes precedence.
+  Syntastic will still automatically close the Location list when it becomes
+  empty.
+
+- Use CTRL-SHIFT-PageUp/PageDown to move tab pages (in analogy to the built-in
+  CTRL-PageUp/PageDown that switch tabs).  This works only in Gvim, not in
+  console Vim.
+
+- Remove most EasyMotion mappings that in practice didn't get used.
+  Map <Space>l to (easymotion-bd-jk) to navigate to lines.
+
+- Ignore Syntastic warnings about unused imports from Python's "future" package.
+
+- Default to ":SyntasticBufferSetup strict" for Python files.  For details on
+  controlling this via localvimrc files, see :help notes_syntastic.
+
+2015-05-28
+==========
+
+- When pressing <F4>/<s-F4> to traverse the QuickFix or Location list, detect
+  when it has run off the end/beginning of the list and use :cc/:ll to jump to
+  the last/first entry; this allows these keys to be useful when there is only
+  one entry in the list to begin with (such as when there is a single Syntastic
+  error in the Location list).
+
+2015-05-17
+==========
+
+- Enable UltiSnips if either Python 2 or Python 3 is available (previously,
+  it was enabled only for Python 2).
+
+- Use the system clipboard in addition to the X11 primary selection for the
+  unnamed register.  Yanks will go into both the clipboard and the primary
+  selection; puts will come from the clipboard.  To use the primary selection
+  directly, use <C-S-Insert> or reference the ``*`` register explicitly, e.g.::
+
+    "*p
+
+  This provides smoother integration with the bulk of applications that use
+  the clipboard instead of the primary selection.
+
+- Remove some extra GUI features that take up screen space unnecessarily.
+  Now disabled are:
+
+  - Scrollbars.
+  - GUI menu.
+
+  To learn how to re-enable these features, see :help notes_guioptions.
+
+2015-05-11
+==========
+
+- Update incsearch to version 2015-05-04.  Also disable activation if Vim is
+  too old (before 7.3.32), fixing problems on CentOS 6 with Vim 7.2.x.
+
+2015-04-30
+==========
+
+- Update to fontsize v0.3.4 (now loads plugin only if GUI is running).
+
+2015-04-29
+==========
+
+- Unmap/re-map 'ds' for BufExplorer buffers.  This eliminates the delay
+  when using 'd' in BufExplorer to delete a buffer.
+
+- Add Quickfix-reflector plugin, allowing the user to edit the results of a
+  QuickFix-based search and then save the QuickFix buffer itself, propagating
+  the changes back to the original files.  See :help notes-quickfix-reflector
+  for details.
+
+2015-04-27
+==========
+
+- Update to headerguard v0.2.2 (adds feature to use C++-style comments on the
+  "#endif" line).
+
+2015-04-26
+==========
+
+- Preserve "endwise" plugin hook of insert-mode <CR> when re-sourcing vimrc.
+  Previously, endwise's hook to this insert-mode mapping would be clobbered
+  by the one in vimrc on a second :source of vimrc.
+
+- Stop squelching Syntastic warnings globally.  Use :SyntasticBufferSetup
+  in a localvimrc file to adjust Syntastic behavior on a per-directory basis.
+
+- Chain invocations of :Ack through Python where possible to work around
+  problems with quote handling in Strawberry Perl and ActivePerl on Windows.
+
+- Default to 79-column margin for Python for PEP8 compliance.  When using
+  ``:SyntasticBufferSetup lax``, however, fall back to 80-column margins.
+
+- Incorporated vim-python-pep8-indent plugin for improved Python indentation
+  support for PEP8 compliance.
+
+2015-04-25
+==========
+
+- Removed space after C snippets for fixed-width integers (int8_t and friends),
+  as for several use cases the space is incorrect and must be deleted manually
+  (which feels like correcting a mistake in the snippet).  It simplifies the
+  mental model of the snippet, which is can now be viewed as an abbreviation for
+  the corresponding type.  To restore the old behavior in the event that
+  adjusting to the new snippets proves difficult, these snippets can be
+  overridden by per-user snippets that contain the space.
+
+- Change ``:SyntasticSetup strict/strict_except_case`` for Python to avoid
+  pylint (which is *very* strict).  Add new style ``very_strict`` to enable
+  full-bore pylint-based checking.  Set default Python checkers to just
+  'python' and 'flake8'.
+
+- Restore automatic opening of the location list when Syntastic discovers errors
+  by changing g:syntastic_auto_loc_list from 2 back to 1.  Syntastic
+  internally uses autocmds to toggle the location list.  When the location
+  list is focused and :lclose is issued, the associated buffer is re-entered
+  and Syntastic sees that the location list should be open, so it re-opens
+  it.  Now CTRL-Q CTRL-L uses ``:noautocmd lclose`` to close the location list,
+  preventing Syntastic from re-opening it.
+
+- Add folding support for QuickFix and Location List windows.  See
+  :help FoldQuickFixFiles and :help FoldQuickFixDirs for details.
+
+2015-04-22
+==========
+
+- Remove leftover files from old EnhancedCommentify plugin (thanks to Mike
+  Haig).
+
+2015-04-21
+==========
+
+- Disable custom QuickFix mappings for Ack and Ag plugins.  They stop working
+  after the QuickFix window is closed and re-opened, and they don't work
+  generically for all uses of QuickFix.
+
+2015-04-19
+==========
+
+- Add a number of features in support of finding and renaming identifiers
+  of various naming conventions.  See :help notes_identifier_case for details on
+  :LmcToUnderscore and friends.
+
+2015-04-12
+==========
+
+- Stop automatically opening the location list when Syntastic discovers errors
+  by changing g:syntastic_auto_loc_list from 1 to 2.  Syntastic somehow
+  interferes with the proper operation of toggling the location list via
+  CTRL-Q CTRL-L unless the above change is made.  Hopefully eventually we'll
+  figure out what's causing that interaction such that we can re-enable
+  automatic opening of the list.  Until then, you may manually open the location
+  list via CTRL-Q CTRL-L.
+
+- Add many Syntastic-related commands; see :help notes_syntastic for details.
+
+2015-04-09
+==========
+
+- Improve font size logic for OS/X (thanks for John Szakmeister).  DPI scaling
+  is now done via the new AdjustBaseFontSize() function.
+
+- Treat Coverage configuration file (``.coveragerc``) as a config file (thanks
+  to John Szakmeister).
+
+2015-03-21
+==========
+
+- Update Syntastic plugin to version 2015-03-19.
+
+2015-03-14
+==========
+
+- Update UltiSnips to version 2015-03-05.  This version supports the snippet
+  flag "m" which removes end-of-line whitespace on all snippet lines.  This
+  keeps the indentation of empty snippet lines from acquiring spurious extra
+  whitespace.  ~/.vim/pylib/sniputil.py has been adjusted to add the "m" flag
+  for any snippet containing a blank line; other snippets are left as-is,
+  allowing snippets such as "int8_t " to retain their trailing whitespace
+  without modification to their definitions.  This sniputil.py feature will not
+  take effect until the .snippets files are regenerated.
+  ``/.vim/UltiSnips/*.snippets`` have already been regenerated as follows::
+
+    cd ~/.vim/UltiSnips
+    touch *.py
+    make
+
+2015-03-09
+==========
+
+- Update rst2ctags to version v0.1.4.  rst2ctags now works with headings that
+  contain UTF-8 characters (thanks to John Szakmeister).
+
+2015-02-16
+==========
+
+- Update markdown2ctags to v0.1.2 (thanks to John Szakmeister).  This fixes an
+  issue where comments inside GitHub Flavored Markdown code blocks would be seen
+  as section headers.
+
+2015-01-28
+==========
+
+- Remove Startify plugin.  It has not proved valuable to new users while
+  managing to be irritating to power users.
+
+2015-01-18
+==========
+
+- Escape the pipe character when using <F3> to search for a literal string.
+
+- Change "#" to use double-quotes on Windows when constructing the proper
+  arguments for :Ack/:Ag.
+
+2015-01-04
+==========
+
+- Update the Syntastic plugin to version 2015-01-04 (thanks to John
+  Szakmeister).  This fixes an issue where wildignore was affecting calls to
+  expand(), glob(), and globpath() causing some checkers to fail in interesting
+  ways (javac, for example).
+
+2014-12-26
+==========
+
+- For determining the user's login name, use $USERNAME on Windows instead of
+  $USER (thanks to John Szakmeister).
+
+2014-12-15
+==========
+
+- Use executable("ag") instead of exepath("ag") for compatibility with older
+  Vim.
+
+2014-12-06
+==========
+
+- Add single-file implementation of "ack" script and use it for the :Ack
+  command.  This ensures that all systems with Perl installed will have Ack
+  functionality.
+
+2014-12-04
+==========
+
+- Add Ack plugin for searching using the 'ack' utility.  See :help notes_ack
+  for details.
+
+- Add Ag plugin for searching using the 'ag' utility.  See :help notes_ag
+  for details.
+
+- Add '#' to search for the word under the cursor (in Normal mode) or the
+  current selection (in Visual mode) using :Ag! (if available) or :Ack!
+  (otherwise).
+
+- Add :G to search using :Ag! (if available) or :Ack! (otherwise).
+
+2014-12-03
+==========
+
+- Use automatic period for certain snippets (e.g., "func" for function
+  definitions).  Automatically provides period to end the sentence unless a
+  period or exclamation point is already provided.
+
+- Enable UltiSnips by default only when Python is built into Vim.
+
+2014-12-02
+==========
+
+- Support <Leader>of for snippets files (thanks to Mike Haig).
+
+- Add C snippets for static function (sfunc), function prototype (Func), and
+  enumerations (enum) (thanks to Mike Haig).
+
+- Use 79-character comment banners.
+
+- Add EasyMotion plugin.  This adds several new kinds of motions.  See :help
+  notes_easymotion for details.
+
+2014-11-25
+==========
+
+- Add <Space><Space> as an additional mapping to invoke BufMRU mode.  This is
+  aimed at preserving the muscle memory of the original single-<Space> mapping
+  while retaining the use of <Space> as a leader key.
+
+2014-11-24
+==========
+
+- BREAKING CHANGE: Change BufMRU key from <Space> to <C-6>.  The space key is
+  too valuable to be dedicated to this single function.  Note that <C-6> is the
+  same as <C-^>, so you don't have to press the shift key to invoke BufMRU mode.
+  This is also the same as Vim's keystroke to toggle between buffers, so it's a
+  natural fit for this plugin.
+
+- BREAKING CHANGE: Change key mapping of recently added "sneak" plugin.  The
+  default mappings were hard to remember, since they were different in normal,
+  visual, and operator-pending modes.  Now <Space>s sneaks forward and <Space>S
+  sneaks backward in all modes.  See ``:help notes_sneak`` for more details.
+
+- Fix Easy-Align mapping prefix to be <Leader>a instead of \a.
+
+2014-11-23
+==========
+
+- Detect salt server files (thanks to John Szakmeister).
+
+- Add Easy-Align plugin.  Visually select a group of lines, then press \a
+  to begin alignment.  Press a delimiter key (such as <Space>, =, comma, etc.)
+  to align on that delimiter.  See :help notes_easyalign for more details.
+
+- BREAKING CHANGE: Remove Align plugin (replaced by Easy-Align).
+
+- Change indentation for backslash-continuations in vimscript to be 8 characters
+  instead of 12.
+
+2014-11-22
+==========
+
+- Tighten up diff highlighting in emails to avoid mistakenly highlighting
+  bulleted lists that start with hyphens.
+
+- Synchronize email syntax highlighting from start to keep highlighting in-sync
+  for lengthy patches.
+
+- Update rst2ctags to version 0.1.3.  This updates heading detection to include
+  all of the recommended characters that can be used to underline headings
+  (thanks to John Szakmeister).
+
+2014-11-19
+==========
+
+- Add ``EditSnippets`` command (thanks to John Szakmeister).
+
+- During a Git rebase operation, the following mappings are now available
+  (thanks to John Szakmeister):
+
+  - <Leader><Leader>e Change rebase action to "edit"
+  - <Leader><Leader>f Change rebase action to "fixup"
+  - <Leader><Leader>p Change rebase action to "pick"
+  - <Leader><Leader>r Change rebase action to "reword"
+  - <Leader><Leader>s Change rebase action to "squash"
+
+- Setup 'shellpipe' to keep Vim from hiding failures (thanks to John
+  Szakmeister).
+
+- Synchronize python and shell syntax highlighting from start-of-file to avoid
+  highlighting errors (thanks to John Szakmeister).
+
+- Highlight diffs in emails (thanks to John Szakmeister).
+
+- Reuse the current window when opening a new file with CtrlP (thanks to John
+  Szakmeister).  Try this via CTRL-p CTRL-p (or any other file-based CtrlP
+  operation), type a filename that doesn't exist, then press CTRL-y to create
+  that file.
+
+- Disable Powerline support for terminals with eight or fewer colors (thanks to
+  John Szakmeister).
+
+- Treat .syntastic_c_config files as vim files (thanks to John Szakmeister).
+
+- Add AddTags() function for use in ``.lvimrc`` files (thanks to John
+  Szakmeister).
+
+2014-11-16
+==========
+
+- Update "lusty-juggler" plugin to version 2014-11-15 (0e73d8d) which includes
+  John Szakmeister's fix.
+
+- Update "lusty-explorer" plugin to version 2014-11-15 (0e73d8d).
+
+- Add "sneak" plugin, bringing new "s{char}{char}" motion and "z{char}{char}"
+  operator.  Pressing "s" followed by two consecutive characters in your file to
+  move to that location.  See ``:help notes_sneak`` for more details.
+
+- Add "incsearch" plugin.  Now "/" and "?" highlight all matches incrementally
+  while typing.  See ``:help notes_incsearch`` for more details.
+
+- Update "surround" plugin to version 2014-07-26.
+
+2014-11-15
+==========
+
+- Prevent the highly irritating problem wherein the cursor jumps back to the
+  previously saved position when the user scrolls the inactive window with the
+  mouse wheel and then clicks in the window.
+
+- Make localvimrc decisions persistent only for uppercase answers (Y/N/A).  This
+  way, you can provide a one-time approval for the given .lvimrc.
+
+- Don't run .lvimrc files in a sandbox.  The user must approve the use of any
+  given .lvimrc file, and he must re-approve it whenever the contents of the
+  .lvimrc file changes; therefore, it's safe to run them outside of the :sandbox
+  command.  In particular, this permits using things like :HighlightOff inside a
+  .lvimrc.
+
+- Fix bad interaction between the LustyJuggler and endwise plugins (thanks to
+  John Szakmeister).
+
+2014-11-13
+==========
+
+- Change the Sphinx syntax checker to use HTML output instead of text.  This
+  fixes some length slow-downs when saving .rst files that are part of a
+  Sphinx-based project.
+
+2014-11-11
+==========
+
+- Update CtrlP plugin to version 2014-10-13, switching from the unmaintained
+  version from the original author (who seems to have fallen off the grid).
+
+  Set g:ctrlp_switch_buffer empty to prevent CtrlP from jumping to other
+  windows.  Now selected buffers will open in the current window, even if the
+  buffer is already open in another window.
+
+- Adjust snippets for Makefiles.
+
+- Update endwise plugin to version 2014-10-01.
+
+2014-11-04
+==========
+
+- Update signature plugin to 2014-11-03.  This makes marks work like they are
+  supposed to work in Vim, which is that setting a mark on a line via ``mx``
+  does not toggle the mark.  To delete mark ``x``, use ``dmx``.  This is
+  controlled via these two variables in vimrc (they may be overridden in your
+  vimrc-after if you'd like signature's toggling-mark behavior back)::
+
+    " Disable toggling of marks and markers.
+    let g:SignatureForceMarkPlacement = 1
+    let g:SignatureForceMarkerPlacement = 1
+
+2014-11-04
+==========
+
+- Make :L, :L2, etc., account for the presence of extra columns in the gutter
+  (for line numbers and for diff-mode indicators).
+
+2014-10-26
+==========
+
+- Add signature plugin to display Vim :marks.  Now, after setting a mark (such
+  as with ``ma``), a Vim "sign" will be shown in the gutter to show the mark's
+  location.
+
+- Enable the use of the "colorcolumn" feature.  When 'textwidth' is non-zero,
+  a vertical colored line will be displayed one column beyond 'textwidth' to
+  help visually track the margin.
+
+- Set szakdark's ColorColumn color to be a muted dark gray.
+
+2014-10-25
+==========
+
+- Update bufexplorer plugin to 7.4.5 (the nnoremap patch has been merged).
+
+2014-10-23
+==========
+
+- Adjust :L, :L2, etc., to use 82-column window widths by default, to
+  accommodate the use of Vim's :signs (which take two extra columns).
+  See :help notes for details on configuring the window width.
+
+2014-10-15
+==========
+
+- Break undo for insert-mode CTRL-u and CTRL-w; otherwise, an undo will just
+  remove all text from the current insert operation instead of bringing back
+  the deleted text.
+
+2014-10-14
+==========
+
+- Patch BufExplorer to define mappings only for normal mode.  The overly broad
+  "noremap" command used previously created undesirable select-mode mappings
+  for "\be" and friends.
+
+- Unmap some stray undesirable select-mode mappings that appeared after a
+  plugin upgrade.
+
+- Turn off UltiSnips's feature of unmapping select-mode mappings.  It ought to
+  :sunmap only mappings that start with a printable character, but it unmaps
+  too much (e.g., it removes select-mode <M-z>).
+
+2014-10-13
+==========
+
+- Update BufExplorer to version 7.4.4 (no significant changes; updated to
+  prepare for future patches).
+
+2014-10-10
+==========
+
+- Map <M-u><M-l> to list snippets matching trigger at cursor.  This is useful
+  for Console Vim, where the default <C-Tab> mapping doesn't work.
+
+- Map <M-u><Tab> to the UltiSnips "jump forward" action.  <Tab> is overloaded
+  to expand a snippet if possible, and to jump forward if no trigger is found.
+  When this is not desired, <M-u><Tab> can be used to force the jump action
+  instead of expanding the trigger (perhaps after undoing the erroneous snippet
+  expansion via <M-u><M-u> or <M-z>).
+
+- Break undo when triggering a snippet, so that if you undo after expanding
+  a snippet, only the snippet expansion is undone.
+
+2014-09-18
+==========
+
+- Upgrade UltiSnips to version 2014-09-13.
+
+- Improve <M-z> (undo) mapping to stay in the same mode from which is
+  was invoked.  Add <M-u><M-u> mapping as an alias, as it's expected
+  to be easier to type and remember in some cases.
+
+2014-09-13
+==========
+
+- Automatically shorten filenames in QuickFix window.  Commands like :Regrep
+  leave absolute paths in the QuickFix results for files not already open in
+  Vim.  A new autocmd now invokes ShortenFilenames() to perform Vim's filename
+  shortening algorithm (such as converting to a relative path when the result
+  is contained within the current working directory).
+
+- Add documentation for colorscheme detection and for configuring ssh to
+  propagate the COLORFGBG environment variable to aid background color
+  detection accuracy.
+
+2014-09-07
+==========
+
+- Provide support for extremely early per-user configuration of variables via
+  the new ``VIMRC_VARS`` script file.  Most users won't need this; it comes in
+  handy for disabling bundles before the main vimrc activates them all.
+
+- BREAKING CHANGE: To better support the use of bundles in vimrc-before.vim
+  scripts, all bundles are activated now before sourcing this script.  In the
+  off chance that you were setting g:pathogen_disabled in your vimrc-before.vim
+  script, you'll need to move this definition to a vimrc-vars.vim file.
+
+  With this change, all supported colorschemes are available for use directly
+  in the vimrc-before.vim script; tricks with pathogen#surround() are no longer
+  required.
+
+- Add some new colorschemes:
+  - badwolf (dark)
+  - base16-* (collection of colorschemes)
+  - gruvbox (dark)
+  - hemisu (dark)
+  - hybrid (dark)
+  - monokai (dark)
+  - wombat256i (dark)
+
+- Update grep plugin to version 1.11.
+
+2014-09-06
+==========
+
+- Disable Startify for Vim versions prior to 7.3.633.  Startify hangs on
+  Windows with Vim 7.3.46 on some machines, but works with 7.3.633.  Since I
+  can't replicate it with Vim 7.3.46 on another machine, its easier to just
+  disable Startify as a work-around.
+
+2014-08-31
+==========
+
+- Add "Startify" plugin to show recently used files in custom startup screen,
+  with the side benefit of displaying a reminder about ':help notes' and
+  ':help localnotes'.
+
+2014-08-28
+==========
+
+- Mention that ":help localnotes" provides access to any "local" notes
+  (covering vimfiles additions stored in ~/.vim/local/).
+
+2014-08-27
+==========
+
+- When Vim can be trusted, vimfiles will now honor its light-background
+  detection choice.  Vim can't really detect the background color properly in
+  many cases (especially when running in a console).  For example, it loses
+  detection accuracy after ssh'ing to another machine and after executing ``su
+  -`` or ``sudo -i``.  For this reason, vimfiles used to unconditionally force
+  a dark-background colorscheme (unless the user preselects a preferred
+  colorscheme using the VIMUSER mechanism).  But in the special case that the
+  COLORFGBG environment variable is set accurately, console Vim can correctly
+  detect the background color.  Not all terminal emulators set this variable,
+  but rxvt and KDE's konsole do (but sadly, xterm does not).  This variable is
+  lost when executing ``su -`` or ``sudo -i``, and when ssh'ing to another
+  machine (unless the ssh client and server settings are changed to propagate
+  the variable to the server).  In the cases where this variable *has* been
+  set, vimfiles will now honor it, so rxvt and konsole terminals that use a
+  light background will work out-of-the-box, at least until the user loses the
+  COLORFGBG definition for some reason (such as the above scenarios).
+
+2014-08-24
+==========
+
+- Fix a problem with :Highlight seeming to be turned off by default on older
+  Vim versions.  The newly refactored :Highlight command was tested on a recent
+  Vim; that version of Vim allowed syntax groups defined in a FileType autocmd
+  to survive, such that things worked as expected.  Older versions of Vim do
+  not seem to preserve syntax groups defined in the FileType autocmd, so the
+  checks turned on by the :Highlight command appeared to be off by default.  As
+  a work-around, the :HighlightOn command may be issued manually to re-apply
+  the groups after a file has been loaded.
+
+  The change in Vim occurred somewhere between versions 7.4.179 and 7.4.410.
+
+2014-08-08
+==========
+
+- Eliminate invalid ``l:`` prefix on a function name.  This was apparently
+  always illegal, but Vim used to permit it.
+
+2014-07-30
+==========
+
+- BREAKING CHANGE: Rename Foldsearch, Foldcomments, and Toascii to FoldSearch,
+  FoldComments, and ToAscii for uniformity with other commands.
+
+- When embedding languages into ``.rst`` files for syntax highlighting, don't
+  allow the languages to change 'iskeyword'.  Previously, the ``sh`` language
+  was adding a period to 'iskeyword'.
+
+- Improved interface for :Highlight command:
+
+  - New g:HighlightEnabled variable to control the default disposition of
+    highlighting.  In vimrc, this is set to 1, but it may be overridden in a
+    vimrc-after file.
+
+  - New :HighlightOn and :HighlightOff commands that toggle highlighting for a
+    single buffer.
+
+  It's recommended to avoid invoking ":Highlight no*" to disable highlighting,
+  as that makes it difficult to restore highlighting of the items configured
+  for the filetype; instead, use a combination of g:HighlightEnabled and
+  :HighlightOn/:HighlightOff.
+
+- When pressing <CR> in insert mode, trailing whitespace will be removed from
+  the previous line.  So, with your cursor on the "X" below:
+
+    Place cursor on X and press Enter
+
+  Pressing Enter will remove the trailing space from "Place cursor on ".  This
+  helps avoid leaving trailing whitespace in a file.
+
+  See :help notes for ideas to intentionally preserve whitespace when pressing
+  <Enter>.
+
+2014-07-27
+==========
+
+- Add "unittest" plugin.
+
+- Add routines for path manipulation in vimrc.
+
+- Add unit tests for vimrc in test/test_vimrc.vim.
+
+- Add RtpInherit() to allow inheriting from another user's configuration.
+
+2014-07-26
+==========
+
+- Update fixkey to version 0.3.5 (supports TERM=screen-it and similar).
+
+2014-07-22
+==========
+
+- Cause cpp snippets to inherit c snippet (thanks to John Szakmeister).
+
+2014-07-13
+==========
+
+- Upgrade fugitive to version 2014-07-07.  Incorporates a fix to ensure fugitive
+  disables diff-mode only when it caused diff-mode in the first place.
+
+2014-06-26
+==========
+
+- Upgrade fixkey to version 0.3.4.  This includes a changed default for
+  'ttimeoutlen' (which won't impact much, as 5 ms is already set
+  in vimrc), and documentation of an inherent problem using Vim macros
+  to play back ambiguous keycodes.
+
+2014-06-23
+==========
+
+- Upgrade textobj-user to version 0.6.3 and textobj-function to version 0.4.0.
+  This fixes problems with newer versions of Vim.  John Szakmeister worked with
+  the maintainer of these plugins to get the needed corrections in-place.
+
+2014-06-21
+==========
+
+- Upgrade to UltiSnips 3.0 (thanks to John Szakmeister).  The "sample" snippets
+  that used to ship with UltiSnips were removed in UltiSnips 3.0 and repackaged
+  with the "vim-snippets" project.  In addition, the "clearsnippets"
+  functionality in UltiSnips 3.0 is no longer very useful, since snippet
+  priority based on runtimepath ordering is no longer a feature.  Therefore,
+  these sample snippets have been imported for reference into
+  vimfiles/optional-bundle/snippets, with instructions at :help notes_snippets
+  for activating them.
+
+2014-05-17
+==========
+
+- Upgrade fixkey plugin to 0.3.3 (fixes PuTTY SCO keymap for F1 through F12 for
+  console Vim).
+
+2014-04-05
+==========
+
+- Upgrade fontsize plugin to 0.3.3 (adds support for [count]).
+
+2014-03-28
+==========
+
+- Add John Szakmeister's work-around to define UltiSnips_FileTypeChanged
+  when UltiSnips is disabled.
+
+- Upgraded togglecursor to 0.2.0.
+
+2014-03-15
+==========
+
+- Change ttimeoutlen to 5 ms to avoid Console vim errors when pressing <Esc>
+  followed too closely by a letter (which look too much like the terminal's
+  encoding for Alt+letter).
+
+2014-03-04
+==========
+
+- Add support for Lua and Moonscript languages.
+
+2014-02-23
+==========
+
+- Update rst2ctags to v0.1.2 and markdown2ctags to v0.1.1.  This fixes some
+  issues with having backslash characters in headings (thanks for John
+  Szakmeister for these updates).
+
+- Add g:EnableUltiSnips to allow UltiSnips to be disabled.  This helps with
+  NeoVim, a Vim fork that doesn't support Python bindings yet.
+
+2014-02-18
+==========
+
+- Fail gracefully when setting the 'j' flag in 'formatoptions' on Vim older
+  than 7.3.541 (when this flag was first introduced).
+
+2014-02-17
+==========
+
+- Consolidate 'formatoptions' settings for filetypes into shared setup
+  functions.  SetupCommon(), SetupText(), and SetupSource() now collaborate to
+  provide textfile-like and sourcecode-like format settings that should be
+  usable unchanged across most types of files.
+
+  In addition, the flag 'n' is now included in all filetypes, so that the
+  reformatting operator "gq" (also mapped to Alt-Q) now properly preserves
+  bulleted and numbered items.  For example, this text::
+
+    Some text
+    - with a
+      bulleted
+      item
+    - and another
+      one
+
+  Will reformat (using Alt-Q) to the following text::
+
+    Some text
+    - with a bulleted item
+    - and another one
+
+- Extend 'formatlistpat' to view a header's underline as it would a list item.
+  This hack prevents Vim from reformatting underlined headers.  So, for
+  example, pressing Alt-Q when on the below text leaves it unchanged::
+
+    An underlined header
+    ====================
+
+  Unfortunately, it doesn't work for over/under headers.  This text::
+
+    =================
+    Over/under header
+    =================
+
+  will be reformatted badly to this::
+
+    ================= Over/under header
+    =================
+
+  But since underlined headers are the most common, this is better
+  than nothing, and it's much easier to use Vim's built-in formatting
+  logic than to write something custom.
+
+
+2013-12-13
+==========
+
+- Augment Python Path with all "pylib" directories in Vim runtimepath.  Migrate
+  "sniputil" to ~/.vim/pypath.  See "Python Path" section in notes.txt for more
+  details.
+
+- Incorporate more uses of John Szakmeister's "betterVisual()" support for
+  UltiSnips snippets.
+
+2013-12-12
+==========
+
+- Start at the top of the buffer when doing a ``git rebase -i``
+
+2013-12-10
+==========
+
+- Moved fswitch to a bundle and updated to 0.9.5.
+
+2013-12-05
+==========
+
+- Add John Szakmeister's markdown2ctags tool to support Markdown files in
+  tagbar.
+
 2013-12-01
 ==========
 
@@ -68,10 +1357,10 @@ require adjustment of per-user settings.
 - Convert from Blacklisting of font families that don't support Unicode Symbols
   properly to having a whitelist of known-good font families, since Powerline
   looks very bad when using Powerlines_symbols == "unicode" with a font family
-  that doesn't support the symbols.
-  The variable g:GoodUnicodeSymbolFontFamilyPatterns may now be set from a
-  |VIMRC_BEFORE| script to extend the list of font families that have
-  known-good support for Unicode Powerline symbols.  See vimrc for more details.
+  that doesn't support the symbols.  The variable
+  g:GoodUnicodeSymbolFontFamilyPatterns may now be set from a ``VIMRC_BEFORE``
+  script to extend the list of font families that have known-good support for
+  Unicode Powerline symbols.  See vimrc for more details.
 
 - Add a way to detect changes in Powerline settings and automatically delete
   stale cached ``Powerline*.cache`` files as Vim starts.
@@ -83,13 +1372,13 @@ require adjustment of per-user settings.
 
     find ~/.vim -name 'Powerline*.cache' -delete
 
-  In addition, if you make adjustments to Powerline settings in your
-  per-user |VIMRC_BEFORE|, set ``g:PowerlineRequiredCacheTag`` to a
-  unique value every time you make a change to the format.  For example::
+  In addition, if you make adjustments to Powerline settings in your per-user
+  ``VIMRC_BEFORE``, set ``g:PowerlineRequiredCacheTag`` to a unique value every
+  time you make a change to the format.  For example::
 
     let g:PowerlineRequiredCacheTag = "2013-11-11"
 
-- Cleaned up references to |VIMRC_BEFORE| and |VIMRC_AFTER|.
+- Cleaned up references to ``VIMRC_BEFORE`` and ``VIMRC_AFTER``.
 
 - Add Powerline segment to detect trailing whitespace.
 
@@ -106,10 +1395,10 @@ require adjustment of per-user settings.
 - Blacklist Consolas from using g:Powerline_symbols == "unicode", as that font
   doesn't properly support the needed Unicode symbols.
 
-- Enable fontdetect and colorsamplerpack bundles early for use in |VIMRC_BEFORE|
-  scripts.
+- Enable fontdetect and colorsamplerpack bundles early for use in
+  ``VIMRC_BEFORE`` scripts.
 
-- Allow g:DefaultFontFamilies to be set from |VIMRC_BEFORE| scripts.
+- Allow g:DefaultFontFamilies to be set from ``VIMRC_BEFORE`` scripts.
 
 - Update swapit plugin to version 0.3.2.
 
@@ -163,6 +1452,7 @@ require adjustment of per-user settings.
 - Perform ``:diffupdate`` on <C-L> as part of screen refreshing.
 
 - Define ``SetupMakeIndent`` to override some indent-related settings for
+  makefiles.
 
 - Define first-cut experimental snippets for Makefiles.
 

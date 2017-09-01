@@ -11,6 +11,9 @@ endif
 
 let colors_name = "szakdark"
 
+if !exists("g:szakdark_subtle_search")
+    let g:szakdark_subtle_search=0
+endif
 
 "hi Example         guifg=NONE        guibg=NONE        gui=NONE      ctermfg=NONE        ctermbg=NONE        cterm=NONE
 
@@ -72,7 +75,12 @@ if version >= 700 " Vim 7.x specific colors
   hi MatchParen     guifg=#f6f3e8     guibg=#857b6f     gui=BOLD      ctermfg=white       ctermbg=darkgray    cterm=NONE
   hi Pmenu          guifg=#f6f3e8     guibg=#444444     gui=NONE      ctermfg=230         ctermbg=238         cterm=NONE
   hi PmenuSel       guifg=#000000     guibg=#cae682     gui=NONE      ctermfg=black       ctermbg=192         cterm=NONE
-  hi Search         guifg=NONE        guibg=#2F2F00     gui=underline ctermfg=NONE        ctermbg=NONE	      cterm=underline
+
+  if g:szakdark_subtle_search != 0
+    hi Search       guifg=NONE        guibg=#404000     gui=NONE      ctermfg=NONE        ctermbg=58          cterm=NONE
+  else
+    hi Search       guifg=#c8c800     guibg=NONE        gui=reverse   ctermfg=3           ctermbg=NONE        cterm=reverse
+  endif
 endif
 
 " Syntax highlighting
@@ -176,6 +184,7 @@ hi link javaScriptNumber      Number
 
 " Special for Python
 hi pythonDot guibg=NONE
+hi pythonBytesEscape ctermfg=71 guifg=#439300
 
 
 " Special for CSharp
@@ -193,25 +202,27 @@ hi htmlH5           guifg=#e0e0e0     guibg=#181830     gui=NONE      ctermfg=NO
 hi htmlH6           guifg=#e0e0e0     guibg=#101020     gui=NONE      ctermfg=NONE        ctermbg=NONE        cterm=NONE
 
 " Diff support
-highlight DiffAdd       term=reverse    cterm=bold  ctermbg=darkgreen   ctermfg=white   guibg=#003800 guifg=white
-highlight DiffChange    term=reverse    cterm=bold  ctermbg=cyan        ctermfg=black
-highlight DiffText      term=reverse    cterm=bold  ctermbg=gray        ctermfg=black
-highlight DiffDelete    term=reverse                ctermbg=red         ctermfg=black   guibg=#480000 guifg=white
-highlight diffFile                                  ctermbg=black       ctermfg=yellow  guifg=yellow3
+hi Special          guifg=#E18964     guibg=NONE        gui=NONE      ctermfg=white       ctermbg=NONE        cterm=NONE
+
+highlight DiffAdd       guifg=NONE    guibg=#0e410e     gui=NONE      ctermfg=white       ctermbg=darkgreen               term=reverse
+highlight DiffDelete    guifg=NONE    guibg=#5d1515     gui=NONE      ctermfg=white       ctermbg=red                     term=reverse
+highlight DiffChange                  guibg=#002626     gui=NONE      ctermfg=black       ctermbg=cyan                    term=reverse
+highlight DiffText                    guibg=#303030     gui=NONE      ctermfg=black       ctermbg=gray                    term=reverse
+highlight diffFile      guifg=#c8c800                   gui=NONE      ctermfg=3           ctermbg=black
 highlight link diffAdded DiffAdd
 highlight link diffRemoved DiffDelete
 
 if &t_Co > 255
-    highlight DiffAdd       ctermbg=22      ctermfg=white
-    highlight DiffChange    ctermbg=37      ctermfg=black
-    highlight DiffText      ctermbg=235     ctermfg=black
-    highlight DiffDelete    ctermbg=52      ctermfg=gray
+    highlight DiffAdd       ctermbg=22      ctermfg=NONE
+    highlight DiffDelete    ctermbg=88      ctermfg=NONE
+    highlight DiffChange    ctermbg=23      ctermfg=NONE
+    highlight DiffText      ctermbg=235     ctermfg=NONE
 endif
 
 " ColorColumn
 if exists('+colorcolumn')
     if &t_Co > 255 || has("gui_running")
-        highlight ColorColumn ctermbg=52 guibg=#5f0000
+        highlight ColorColumn ctermbg=234 guibg=#1c1c1c
     else
         highlight ColorColumn ctermbg=8
     endif
@@ -237,3 +248,21 @@ hi IndentGuidesEven guibg=#212121 ctermbg=235
 
 " Git
 hi gitcommitSummary guifg=#96CBFE gui=BOLD ctermfg=lightblue cterm=BOLD
+
+" Subversion
+hi link svnDelimiter Comment
+
+" Java
+hi javaCommentTitle guifg=#7C7C7C gui=BOLD
+hi link javaDocTags javaCommentTitle
+
+" reStructuredText
+hi rstEmphasis       guifg=#E18964 guibg=NONE gui=italic ctermfg=210 ctermbg=NONE cterm=NONE
+hi rstStrongEmphasis guifg=#E18964 guibg=NONE gui=BOLD   ctermfg=210 ctermbg=NONE cterm=BOLD
+
+" Signature
+highlight SignatureMarkText   guifg=#4fff4f guibg=#262626 ctermfg=83  ctermbg=235
+highlight SignatureMarkerText guifg=#b4b4ee guibg=#262626 ctermfg=147 ctermbg=235
+
+let g:SignatureMarkerTextHL='"SignatureMarkerText"'
+let g:SignatureMarkTextHL='"SignatureMarkText"'

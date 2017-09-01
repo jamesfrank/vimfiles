@@ -1,5 +1,5 @@
 "=============================================================================
-"    Copyright: Copyright (c) 2001-2013, Jeff Lanzarotta
+"    Copyright: Copyright (c) 2001-2016, Jeff Lanzarotta
 "               All rights reserved.
 "
 "               Redistribution and use in source and binary forms, with or
@@ -36,7 +36,7 @@
 " Name Of File: bufexplorer.vim
 "  Description: Buffer Explorer Vim Plugin
 "   Maintainer: Jeff Lanzarotta (delux256-vim at yahoo dot com)
-" Last Changed: Tuesday, 22 October 2013
+" Last Changed: Friday, 1 April 2016
 "      Version: See g:bufexplorer_version for version number.
 "        Usage: This file should reside in the plugin directory and be
 "               automatically sourced.
@@ -44,19 +44,22 @@
 "               You may use the default keymappings of
 "
 "                 <Leader>be  - Opens BufExplorer
+"                 <Leader>bt  - Toggles BufExplorer open or closed
 "                 <Leader>bs  - Opens horizontally split window BufExplorer
 "                 <Leader>bv  - Opens vertically split window BufExplorer
 "
 "               Or you can override the defaults and define your own mapping
 "               in your vimrc file, for example:
 "
-"                   noremap <silent> <F11> :BufExplorer<CR>
-"                   noremap <silent> <m-F11> :BufExplorerHorizontalSplit<CR>
-"                   noremap <silent> <c-F11> :BufExplorerVerticalSplit<CR>
+"                   nnoremap <silent> <F11> :BufExplorer<CR>
+"                   nnoremap <silent> <s-F11> :ToggleBufExplorer<CR>
+"                   nnoremap <silent> <m-F11> :BufExplorerHorizontalSplit<CR>
+"                   nnoremap <silent> <c-F11> :BufExplorerVerticalSplit<CR>
 "
 "               Or you can use
 "
 "                 ":BufExplorer"                - Opens BufExplorer
+"                 ":ToggleBufExplorer"          - Opens/Closes BufExplorer
 "                 ":BufExplorerHorizontalSplit" - Opens horizontally window BufExplorer
 "                 ":BufExplorerVerticalSplit"   - Opens vertically split window BufExplorer
 "
@@ -64,26 +67,37 @@
 "      History: See supplied documentation.
 "=============================================================================
 
-" Plugin Code {{{1
-" Exit quickly if already running or when 'compatible' is set. {{{2
+" Exit quickly if already running or when 'compatible' is set. {{{1
 if exists("g:bufexplorer_version") || &cp
     finish
 endif
-"2}}}
+"1}}}
 
 " Version number
-let g:bufexplorer_version = "7.4.2"
+let g:bufexplorer_version = "7.4.9"
 
+" Pluging Code {{{1
 " Check for Vim version {{{2
 if v:version < 700
     echohl WarningMsg
-    echo "Sorry, bufexplorer ".g:bufexplorer_version." required Vim 7.0 and greater."
+    echo "Sorry, bufexplorer ".g:bufexplorer_version." required Vim 7.0 or greater."
+    echohl None
+    finish
+endif
+" Check to see if the version of Vim has the correct patch applied, if not, do
+" not used <nowait>.
+if v:version > 703 || v:version == 703 && has('patch1261') && has('patch1264')
+    " We are good to go.
+else
+    echohl WarningMsg
+    echo "Sorry, bufexplorer ".g:bufexplorer_version." required Vim 7.3 or greater with patch1261 and patch1264."
     echohl None
     finish
 endif
 
 " Create commands {{{2
 command! BufExplorer :call BufExplorer()
+command! ToggleBufExplorer :call ToggleBufExplorer()
 command! BufExplorerHorizontalSplit :call BufExplorerHorizontalSplit()
 command! BufExplorerVerticalSplit :call BufExplorerVerticalSplit()
 
@@ -129,7 +143,6 @@ function! s:Setup()
         autocmd BufWinEnter \[BufExplorer\] call s:Initialize()
         autocmd BufWinLeave \[BufExplorer\] call s:Cleanup()
         autocmd TabEnter * call s:TabEnter()
-        autocmd SessionLoadPost * call s:Reset()
     augroup END
 endfunction
 
@@ -339,6 +352,15 @@ function! BufExplorerVerticalSplit()
     execute "BufExplorer"
 endfunction
 
+" ToggleBufExplorer {{{2
+function! ToggleBufExplorer()
+    if exists("s:running") && s:running == 1 && bufname(winbufnr(0)) == s:name
+        call s:Close()
+    else
+        call BufExplorer()
+    endif
+endfunction
+
 " BufExplorer {{{2
 function! BufExplorer()
     let name = s:name
@@ -412,7 +434,7 @@ function! s:DisplayBufferList()
     " Wipe out any existing lines in case BufExplorer buffer exists and the
     " user had changed any global settings that might reduce the number of
     " lines needed in the buffer.
-    keepjumps 1,$d _
+    silent keepjumps 1,$d _
 
     call setline(1, s:CreateHelp())
     call s:BuildBufferList()
@@ -431,28 +453,28 @@ function! s:MapKeys()
         nnoremap <buffer> <silent> <tab> :call <SID>SelectBuffer()<CR>
     endif
 
-    nnoremap <script> <silent> <buffer> <2-leftmouse> :call <SID>SelectBuffer()<CR>
-    nnoremap <script> <silent> <buffer> <CR>          :call <SID>SelectBuffer()<CR>
-    nnoremap <script> <silent> <buffer> <F1>          :call <SID>ToggleHelp()<CR>
-    nnoremap <script> <silent> <buffer> <s-cr>        :call <SID>SelectBuffer("tab")<CR>
-    nnoremap <script> <silent> <buffer> B             :call <SID>ToggleOnlyOneTab()<CR>
-    nnoremap <script> <silent> <buffer> b             :call <SID>SelectBuffer("ask")<CR>
-    nnoremap <script> <silent> <buffer> d             :call <SID>RemoveBuffer("delete")<CR>
-    xnoremap <script> <silent> <buffer> d             :call <SID>RemoveBuffer("delete")<CR>
-    nnoremap <script> <silent> <buffer> D             :call <SID>RemoveBuffer("wipe")<CR>
-    xnoremap <script> <silent> <buffer> D             :call <SID>RemoveBuffer("wipe")<CR>
-    nnoremap <script> <silent> <buffer> f             :call <SID>ToggleFindActive()<CR>
-    nnoremap <script> <silent> <buffer> m             :call <SID>MRUListShow()<CR>
-    nnoremap <script> <silent> <buffer> o             :call <SID>SelectBuffer()<CR>
-    nnoremap <script> <silent> <buffer> p             :call <SID>ToggleSplitOutPathName()<CR>
-    nnoremap <script> <silent> <buffer> q             :call <SID>Close()<CR>
-    nnoremap <script> <silent> <buffer> r             :call <SID>SortReverse()<CR>
-    nnoremap <script> <silent> <buffer> R             :call <SID>ToggleShowRelativePath()<CR>
-    nnoremap <script> <silent> <buffer> s             :call <SID>SortSelect()<CR>
-    nnoremap <script> <silent> <buffer> S             :call <SID>ReverseSortSelect()<CR>
-    nnoremap <script> <silent> <buffer> t             :call <SID>SelectBuffer("tab")<CR>
-    nnoremap <script> <silent> <buffer> T             :call <SID>ToggleShowTabBuffer()<CR>
-    nnoremap <script> <silent> <buffer> u             :call <SID>ToggleShowUnlisted()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> <2-leftmouse> :call <SID>SelectBuffer()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> <CR>          :call <SID>SelectBuffer()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> <F1>          :call <SID>ToggleHelp()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> <s-cr>        :call <SID>SelectBuffer("tab")<CR>
+    nnoremap <script> <silent> <nowait> <buffer> B             :call <SID>ToggleOnlyOneTab()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> b             :call <SID>SelectBuffer("ask")<CR>
+    nnoremap <script> <silent> <nowait> <buffer> d             :call <SID>RemoveBuffer("delete")<CR>
+    xnoremap <script> <silent> <nowait> <buffer> d             :call <SID>RemoveBuffer("delete")<CR>
+    nnoremap <script> <silent> <nowait> <buffer> D             :call <SID>RemoveBuffer("wipe")<CR>
+    xnoremap <script> <silent> <nowait> <buffer> D             :call <SID>RemoveBuffer("wipe")<CR>
+    nnoremap <script> <silent> <nowait> <buffer> f             :call <SID>ToggleFindActive()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> m             :call <SID>MRUListShow()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> o             :call <SID>SelectBuffer()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> p             :call <SID>ToggleSplitOutPathName()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> q             :call <SID>Close()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> r             :call <SID>SortReverse()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> R             :call <SID>ToggleShowRelativePath()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> s             :call <SID>SortSelect()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> S             :call <SID>ReverseSortSelect()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> t             :call <SID>SelectBuffer("tab")<CR>
+    nnoremap <script> <silent> <nowait> <buffer> T             :call <SID>ToggleShowTabBuffer()<CR>
+    nnoremap <script> <silent> <nowait> <buffer> u             :call <SID>ToggleShowUnlisted()<CR>
 
     for k in ["G", "n", "N", "L", "M", "H"]
         execute "nnoremap <buffer> <silent>" k ":keepjumps normal!" k."<CR>"
@@ -480,6 +502,7 @@ function! s:SetupSyntax()
         syn match bufExplorerCurBuf    /^\s*\d\+.%.*/
         syn match bufExplorerAltBuf    /^\s*\d\+.#.*/
         syn match bufExplorerUnlBuf    /^\s*\d\+u.*/
+        syn match bufExplorerInactBuf  /^\s*\d\+ \{7}.*/
 
         hi def link bufExplorerBufNbr Number
         hi def link bufExplorerMapping NonText
@@ -499,6 +522,7 @@ function! s:SetupSyntax()
         hi def link bufExplorerLockedBuf Special
         hi def link bufExplorerModBuf Exception
         hi def link bufExplorerUnlBuf Comment
+        hi def link bufExplorerInactBuf Comment
     endif
 endfunction
 
@@ -560,7 +584,7 @@ function! s:CreateHelp()
         call add(header, '" d : delete buffer')
         call add(header, '" D : wipe buffer')
         call add(header, '" f : toggle find active buffer')
-        call add(header, '" p : toggle spliting of file and path name')
+        call add(header, '" p : toggle splitting of file and path name')
         call add(header, '" q : quit')
         call add(header, '" r : reverse sort')
         call add(header, '" R : toggle showing relative or full paths')
@@ -766,7 +790,7 @@ function! s:SelectBuffer(...)
             " Yes, we are to open the selected buffer in a tab.
 
             " Restore [BufExplorer] buffer.
-            execute "keepjumps silent buffer!".s:originBuffer
+            execute "silent buffer!".s:originBuffer
 
             " Get the tab nmber where this bufer is located in.
             let tabNbr = s:GetTabNbr(_bufNbr)
@@ -809,7 +833,7 @@ function! s:SelectBuffer(...)
             endif
 
             " Switch to the selected buffer.
-            execute "keepalt keepjumps silent b!" _bufNbr
+            execute "keepalt silent b!" _bufNbr
         endif
 
         " Make the buffer 'listed' again.
@@ -900,9 +924,12 @@ endfunction
 function! s:Close()
     " Get only the listed buffers.
     let listed = filter(copy(s:MRUList), "buflisted(v:val)")
+    if len(listed) == 0
+        let listed = filter(range(1, bufnr('$')), "buflisted(v:val)")
+    endif
 
     " If we needed to split the main window, close the split one.
-    if s:splitMode != ""
+    if s:splitMode != "" && bufwinnr(s:originBuffer) != -1
         execute "wincmd c"
     endif
 
@@ -912,7 +939,7 @@ function! s:Close()
         " buffers.
         execute "enew"
     else
-        " Since there are buffers left to switch to, swith to the previous and
+        " Since there are buffers left to switch to, switch to the previous and
         " then the current.
         for b in reverse(listed[0:1])
             execute "keepjumps silent b ".b
@@ -972,7 +999,7 @@ function! s:RebuildBufferList(...)
 
     if a:0 && a:000[0] && (line('$') >= s:firstBufferLine)
         " Clear the list first.
-        execute "keepjumps ".s:firstBufferLine.',$d _'
+        execute "silent keepjumps ".s:firstBufferLine.',$d _'
     endif
 
     let num_bufs = s:BuildBufferList()
@@ -1039,6 +1066,9 @@ function! s:SortListing()
         " Easiest case.
         execute sort 'n'
     elseif g:bufExplorerSortBy == "name"
+        " Sort by full path first
+        execute sort 'ir /\zs\f\+\ze\s\+line/'
+
         if g:bufExplorerSplitOutPathName
             execute sort 'ir /\d.\{7}\zs\f\+\ze/'
         else
@@ -1052,6 +1082,16 @@ function! s:SortListing()
 
         execute sort 'ir /\zs\f\+\ze\s\+line/'
     elseif g:bufExplorerSortBy == "extension"
+        " Sort by full path...
+        execute sort 'ir /\zs\f\+\ze\s\+line/'
+
+        " Sort by name...
+        if g:bufExplorerSplitOutPathName
+            " Sort twice - first on the file name then on the path.
+            execute sort 'ir /\d.\{7}\zs\f\+\ze/'
+        endif
+
+        " Sort by extension.
         execute sort 'ir /\.\zs\w\+\ze\s/'
     elseif g:bufExplorerSortBy == "mru"
         let l = getline(s:firstBufferLine, "$")
@@ -1166,7 +1206,7 @@ function! BufExplorer_ReSize()
     " the lines are pushed up and we see some lagging '~'s.
     let pres = getpos(".")
 
-    execute $
+    normal! $
 
     let _scr = &scrolloff
     let &scrolloff = 0
@@ -1178,7 +1218,7 @@ function! BufExplorer_ReSize()
     call setpos(".", pres)
 endfunction
 
-" Default values {{{1
+" Default values {{{2
 call s:Set("g:bufExplorerDisableDefaultKeyMapping", 0)  " Do not disable default key mappings.
 call s:Set("g:bufExplorerDefaultHelp", 1)               " Show default help?
 call s:Set("g:bufExplorerDetailedHelp", 0)              " Show detailed help?
@@ -1189,26 +1229,29 @@ call s:Set("g:bufExplorerShowDirectories", 1)           " (Dir's are added by co
 call s:Set("g:bufExplorerShowRelativePath", 0)          " Show listings with relative or absolute paths?
 call s:Set("g:bufExplorerShowTabBuffer", 0)             " Show only buffer(s) for this tab?
 call s:Set("g:bufExplorerShowUnlisted", 0)              " Show unlisted buffers?
-call s:Set("g:bufExplorerShowNoName", 0)                " Show "No Name" buffers?
+call s:Set("g:bufExplorerShowNoName", 0)                " Show 'No Name' buffers?
 call s:Set("g:bufExplorerSortBy", "mru")                " Sorting methods are in s:sort_by:
 call s:Set("g:bufExplorerSplitBelow", &splitbelow)      " Should horizontal splits be below or above current window?
 call s:Set("g:bufExplorerSplitOutPathName", 1)          " Split out path and file name?
 call s:Set("g:bufExplorerSplitRight", &splitright)      " Should vertical splits be on the right or left of current window?
 call s:Set("g:bufExplorerSplitVertSize", 0)             " Height for a vertical split. If <=0, default Vim size is used.
 call s:Set("g:bufExplorerSplitHorzSize", 0)             " Height for a horizontal split. If <=0, default Vim size is used.
-"1}}}
 
-" Default key mapping {{{1
+" Default key mapping {{{2
 if !hasmapto('BufExplorer') && g:bufExplorerDisableDefaultKeyMapping == 0
-    noremap <script> <silent> <unique> <Leader>be :BufExplorer<CR>
+    nnoremap <script> <silent> <unique> <Leader>be :BufExplorer<CR>
+endif
+
+if !hasmapto('ToggleBufExplorer') && g:bufExplorerDisableDefaultKeyMapping == 0
+    nnoremap <script> <silent> <unique> <Leader>bt :ToggleBufExplorer<CR>
 endif
 
 if !hasmapto('BufExplorerHorizontalSplit') && g:bufExplorerDisableDefaultKeyMapping == 0
-    noremap <script> <silent> <unique> <Leader>bs :BufExplorerHorizontalSplit<CR>
+    nnoremap <script> <silent> <unique> <Leader>bs :BufExplorerHorizontalSplit<CR>
 endif
 
 if !hasmapto('BufExplorerVerticalSplit') && g:bufExplorerDisableDefaultKeyMapping == 0
-    noremap <script> <silent> <unique> <Leader>bv :BufExplorerVerticalSplit<CR>
+    nnoremap <script> <silent> <unique> <Leader>bv :BufExplorerVerticalSplit<CR>
 endif
 
 " vim:ft=vim foldmethod=marker sw=4

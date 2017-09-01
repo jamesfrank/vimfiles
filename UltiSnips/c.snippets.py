@@ -3,6 +3,7 @@
 
 import sys
 import re
+import setpypath
 
 from sniputil import put
 
@@ -10,24 +11,12 @@ from sniputil import snip, bsnip, wsnip
 from sniputil import abbr, babbr, wabbr
 
 
-# Snippets are now cleared in "clearsnippets" directory.
-#put("clearsnippets\n")
-
 put(r"""
-global !p
-def betterVisual(snip, contIndentLevel=1):
-    import textwrap
+priority -5
 
-    text = textwrap.dedent(snip.v.text)
-    for i, line in enumerate(text.splitlines()):
-        if i == 0:
-            snip.rv = snip.mkline(line)
-            snip.shift(contIndentLevel)
-        elif line.strip():
-            snip += line
-        else:
-            # Avoid indentation for empty lines.
-            snip.rv += "\n"
+global !p
+from sniputil import betterVisual
+from sniputil import autoPeriod
 endglobal
 """)
 
@@ -62,20 +51,57 @@ while ($1)
 }
 """, aliases=["wh"])
 
-bsnip("fore", "for (;;) {...}", r"""
+put(r"""
+global !p
+def snip_c_forLoopVariable(s):
+    # Junk semi-colon and onward.
+    s = s.split(";")[0]
+
+    # Junk everything through final comma (if any).
+    s = s.split(",")[-1]
+
+    # Clobber initializer (if any).
+    s = s.split("=")[0]
+
+    # Keep final whitespace-delimited word.
+    s = s.strip()
+    if s:
+        s = s.split()[-1]
+    return s
+
+def snip_c_forLoopInitializer(s):
+    if ";" in s:
+        return ""
+    elif "=" in s:
+        return ";"
+    else:
+        return " = 0;"
+
+def snip_c_forLoopComparator(s):
+    if ";" in s:
+        return ""
+    for op in ["<", ">", "!", "="]:
+        if s.startswith(op):
+            return " "
+    return " < "
+
+endglobal
+""")
+
+bsnip("forever", "for (;;) {...}", r"""
 for (;;)
 {
     `!p betterVisual(snip)`$0
 }
-""", aliases=["forever"])
+""", aliases=["forev"])
 
 """
 Features of the "for" snippet:
-- In first tab stop, can press "=" to change 
+- In first tab stop, can press "=" to change
   initializer or ";" to remove initializer;
 - In second tab stop, can press different comparison
   (e.g, < <= > >= != ==) to override the default "<". When
-  choosing "<", the third field defaults to var--; 
+  choosing ">", the third field defaults to var--;
 
 More ideas:
 
@@ -102,12 +128,12 @@ pressing ";" terminates
 
 bsnip("for", "for (i = 0; i < N; i++) {...}", (
 r"""for (${1:i}""" +
-r"""${1/(.*;.*)|(.*=.*)|(.+)|.*/(?1::(?2:;:(?3: = 0;:;)))/} """ +
-r"""${1/\s*[=;].*//}""" +
-r"""${2/(.*;.*)|(^[<>!=].*)|.*/(?1::(?2: : < ))/}""" +
+r"""`!p snip.rv = snip_c_forLoopInitializer(t[1])` """ +
+r"""`!p snip.rv = snip_c_forLoopVariable(t[1])`""" +
+r"""`!p snip.rv = snip_c_forLoopComparator(t[2])`""" +
 r"""${2:N}""" +
 r"""${2/(.*;.*)|.*/(?1::;)/} """ +
-r"""${1/\s*[=;].*//}""" +
+r"""`!p snip.rv = snip_c_forLoopVariable(t[1])`""" +
 r"""${3:${2/(^>.*)|.*/(?1:--:++)/}}""" +
 r""")
 {
@@ -173,12 +199,22 @@ endsnippet
 
 """)
 
+bsnip("Func", "type func(...);", r"""
+/******************************************************************************
+    [docexport ${1:funcName}]
+*//**
+    @brief ${2:Description}`!p snip.rv = autoPeriod(t[2])`
+******************************************************************************/
+${3:void}
+$1(${4:void});
+""")
+
 bsnip("func", "type func(...) {...}", r"""
-/*******************************************************************************
+/******************************************************************************
     [docimport ${1:funcName}]
 *//**
-    @brief ${2:Description.}
-*******************************************************************************/
+    @brief ${2:Description}`!p snip.rv = autoPeriod(t[2])`
+******************************************************************************/
 ${3:void}
 $1(${4:void})
 {
@@ -186,12 +222,33 @@ $1(${4:void})
 }
 """, aliases=["def"])
 
-# @todo Create static function definitions with "sfunc", "static".
+bsnip("sfunc", "static type func(...) {...}", r"""
+/******************************************************************************
+    ${1:funcName}
+*//**
+    @brief ${2:Description}`!p snip.rv = autoPeriod(t[2])`
+******************************************************************************/
+static ${3:void}
+$1(${4:void})
+{
+    `!p betterVisual(snip)`$0
+}
+""", aliases=["static"])
+
 # Type-related snippets.
 bsnip("struct", "typedef struct name {...} name;", r"""
-/** @brief ${2:@todo Description of $1.}
+/** @brief ${2:@todo Description of $1}`!p snip.rv = autoPeriod(t[2])`
 */
 typedef struct ${1:name}
+{
+    $0
+} $1;
+""")
+
+bsnip("enum", "typedef enum name {...} name;", r"""
+/** @brief ${2:@todo Description of $1}`!p snip.rv = autoPeriod(t[2])`
+*/
+typedef enum ${1:name}
 {
     $0
 } $1;
@@ -206,8 +263,17 @@ bsnip("Inc", "#include <Header.h>", r"""
 #include <${1:.h}>
 """)
 
+# Standard data types.
+
+# int8_t, uint8_t, and friends.
+for width in [8, 16, 32, 64]:
+    t = "%d" % width
+    t_t = t + "_t"
+    wabbr("i" + t,  "int" + t_t)
+    wabbr("ui" + t,  "uint" + t_t, aliases=[t])
+
 # Doxygen.
-babbr("@param",     "@param[in] ${1:inParam}  ${0:@todo Description of $1.}", 
+babbr("@param",     "@param[in] ${1:inParam}  ${0:@todo Description of $1.}",
         aliases=["@p", "@pi"])
 babbr("@po",   "@param[out] ${1:outParam}  ${0:@todo Description of $1.}")
 babbr("@pio",  "@param[in,out] ${1:inOutParam}  ${0:@todo Description of $1.}")
@@ -217,7 +283,9 @@ bsnip("@retval",    "@retval value, Description", r"""
 @retval ${1:returnValue}
     ${0:Reason to return $1.}
 """, aliases=["@rv"])
-babbr("/**",   "/** @brief ${1:Brief description with period.} */")
-babbr("todo",  "/** @todo ${1:Description of what's TO DO.} */")
-babbr("bug",   "/** @bug ${1:Description of BUG.} */")
-
+babbr("/**",   "/** @brief ${1:Brief description}" +
+        "`!p snip.rv = autoPeriod(t[1])` */")
+babbr("todo",  "/** @todo ${1:Description of what's TO DO}" +
+        "`!p snip.rv = autoPeriod(t[1])` */")
+babbr("bug",   "/** @bug ${1:Description of BUG}" +
+        "`!p snip.rv = autoPeriod(t[1])` */")

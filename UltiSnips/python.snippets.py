@@ -3,13 +3,19 @@
 
 import sys
 import re
+import setpypath
 
 from sniputil import snip, bsnip, wsnip
 from sniputil import abbr, babbr, wabbr
 from sniputil import put
 
-# Snippets are now cleared in "clearsnippets" directory.
-#put("clearsnippets\n")
+put(r"""
+priority -5
+
+global !p
+from sniputil import autoPeriod
+endglobal
+""")
 
 bsnip("#!", "#!/usr/bin/env python...", r"""
 #!/usr/bin/env python
@@ -45,7 +51,7 @@ if __name__ == '__main__':
 ## @todo Include arguments in docstring.
 bsnip("def", "def func(...):...", r'''
 def ${1:funcName}($2):
-    """${3:Description of function $1.}"""
+    """${3:Description of function $1}`!p snip.rv = autoPeriod(t[3])`"""
     ${4:pass}
 ''', aliases=["func"])
 
@@ -111,13 +117,13 @@ finally:
 
 bsnip("class", "class definition", r'''
 class ${1:MyClass}(${2:object}):
-    """${3:Docstring for $1.}"""
+    """${3:Docstring for $1}`!p snip.rv = autoPeriod(t[3])`"""
 
     def __init__(self${4/([^,])?(.*)/(?1:, )/}${4:arg}):
         """
         @todo Document $1.__init__ (along with arguments).
-${4/.+/(?0:\n)/}${4/(\A\s*,\s*\Z)|,?\s*([A-Za-z_][A-Za-z0-9_]*)\s*(=[^,]*)?(,\s*|$)/(?2:        $2 - @todo Document argument $2.\n)/g}        """
-${2/object$|(.+)/(?1:        $0.__init__\(self\)\n\n)/}${4/(\A\s*,\s*\Z)|,?\s*([A-Za-z_][A-Za-z0-9_]*)\s*(=[^,]*)?(,\s*|$)/(?2:        self._$2 = $2\n)/g}
+${4/.+/(?0:\\n)/}${4/(\A\s*,\s*\Z)|,?\s*([A-Za-z_][A-Za-z0-9_]*)\s*(=[^,]*)?(,\s*|$)/(?2:        $2 - @todo Document argument $2.\\n)/g}        """
+${2/object$|(.+)/(?1:        $0.__init__\(self\)\\n\\n)/}${4/(\A\s*,\s*\Z)|,?\s*([A-Za-z_][A-Za-z0-9_]*)\s*(=[^,]*)?(,\s*|$)/(?2:        self._$2 = $2\\n)/g}
 ''', aliases=["cl"])
 
 # @todo Consider "cm" for "classmethod(method)".
@@ -157,7 +163,7 @@ self.assertRaises(${1:exception}, ${2:func}${3/.+/, /}${3:arguments})
 
 bsnip("property", "property", r'''
 def ${1:propName}():
-    doc = """${2:Docstring for $1.}"""
+    doc = """${2:Docstring for $1}`!p snip.rv = autoPeriod(t[2])`"""
     def fget(self):
         return self._$1
     def fset(self, value):
@@ -169,6 +175,24 @@ $1 = property(**$1())
 
 bsnip("pdb", "pdb.set_trace()", r"""
 import pdb; pdb.set_trace()
+""")
+
+# Template for a new .snippets.py file.
+bsnip("template_python.snippets.py", "new snippet template", r"""
+#!/usr/bin/env python
+# vim:set fileencoding=utf8:
+
+import os
+import sys
+import re
+import setpypath
+
+from sniputil import put
+
+from sniputil import snip, bsnip, wsnip
+from sniputil import abbr, babbr, wabbr
+
+$0
 """)
 
 # @todo Snippets for print, logging, formatting strings "%d,%d" % (a,b).

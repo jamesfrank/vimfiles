@@ -29,45 +29,299 @@ set fileencodings=ucs-bom,utf-8,default,latin1
 " directory $HOME/.vim on Unix or %USERPROFILE%\vimfiles on Windows.
 let $VIMFILES = expand("<sfile>:p:h")
 
+function! DetectPlatform()
+    if has("gui_win32")
+        return "win32"
+    endif
+
+    " Assume we're on a Unix box.
+    let name = substitute(system("uname"), '^\_s*\(.\{-}\)\_s*$', '\1', '')
+
+    return tolower(name)
+endfunction
+
+function! DetectVmware(platform)
+    if a:platform == "linux"
+        if filereadable("/sys/class/dmi/id/sys_vendor")
+            for line in readfile("/sys/class/dmi/id/sys_vendor", '', 10)
+                if line =~ '\cvmware'
+                    return 1
+                endif
+            endfor
+        endif
+    elseif a:platform == "freebsd"
+        if executable("kldstat")
+            let output = system("kldstat")
+            if output =~ "vmxnet"
+                return 1
+            endif
+        endif
+    endif
+
+    return 0
+endfunction
+
+let g:Platform = DetectPlatform()
+let g:InVmware = DetectVmware(g:Platform)
+
+function! AdjustBaseFontSize(size)
+    if g:Platform != "darwin"
+        return a:size
+    endif
+
+    " Mac's idea of a point on screen is not the same as everyone else's.
+    " It appears that most operating systems either expect the screen to be 96
+    " DPI, or will query the monitor.  Mac, on the other hand, assumes that the
+    " monitor is 72 DPI.
+    return ((a:size * 96) + 35) / 72
+endfunction
+
+" -------------------------------------------------------------
+" List manipulation
+" -------------------------------------------------------------
+
+function! Flatten(nestedLists)
+    let flattened = []
+    let i = 0
+    while i < len(a:nestedLists)
+        if type(a:nestedLists[i]) == type([])
+            let flattened += Flatten(a:nestedLists[i])
+        else
+            let flattened += [a:nestedLists[i]]
+        endif
+        let i += 1
+    endwhile
+    return flattened
+endfunction
+
+function! ListContains(list, valueToFind)
+    for item in a:list
+        if item == a:valueToFind
+            return 1
+        endif
+    endfor
+    return 0
+endfunction
+
+" Pop leftmost element from list; if list is empty, return defaultValue instead.
+function! ListPop(list, defaultValue)
+    let value = a:defaultValue
+    if len(a:list) > 0
+        let value = a:list[0]
+        unlet a:list[0]
+    endif
+    return value
+endfunction
+
+
+" -------------------------------------------------------------
+" Utility functions
+" -------------------------------------------------------------
+
+" Make sure to include the proper scope on varName (e.g., an unprefixed
+" variable will not be considered global).
+function! GetVar(varName, defaultValue)
+    if exists(a:varName)
+        return eval(a:varName)
+    endif
+    return a:defaultValue
+endfunction
+
+function! DictGet(dict, key, defaultValue)
+    if has_key(a:dict, a:key)
+        return a:dict[a:key]
+    endif
+    return a:defaultValue
+endfunction
+
+function! DictUnlet(dict, key)
+    if has_key(a:dict, a:key)
+        unlet a:dict[a:key]
+    endif
+endfunction
+
+" Verify len(varArgs) <= maxNumArgs, then return a modifiable copy of varArgs.
+function! VarArgs(maxNumArgs, varArgs)
+    let args = copy(a:varArgs)
+    if len(args) > a:maxNumArgs
+        throw "Too many arguments supplied (>" . a:maxNumArgs . ")"
+    endif
+    return args
+endfunction
+
+" Verify len(varArgs) is 0 or 1; return sole arg or defaultValue if none given.
+function! OptArg(varArgs, defaultValue)
+    return ListPop(VarArgs(1, a:varArgs), a:defaultValue)
+endfunction
+
+" Acquire the list of all loaded scripts as absolute paths.
+"   Paths will use native separators (e.g., /unix/path or \windows\path).
+function! ScriptPaths()
+    redir => lines
+    silent! scriptnames
+    redir END
+    let paths = []
+    for line in split(lines, '\n')
+        let path = substitute(line, '^\s*[0-9]\+:\s*\(.*\)', '\1', '')
+        call add(paths, fnamemodify(path, ':p'))
+    endfor
+    return paths
+endfunction
+
+" Return absolute ScriptPath that matches given script.
+"   If an exact match can be found, it will be returned.  Otherwise, if exactly
+"   one absolute path has a:script as a suffix, it will be returned.
+"   The empty string is returned on failure.
+function! GetScript(script)
+    let paths = ScriptPaths()
+    let matches = []
+    for path in paths
+        if path == a:script
+            return path
+        elseif path[-len(a:script):] == a:script
+            call add(matches, path)
+        endif
+    endfor
+    if len(matches) == 1
+        return matches[0]
+    endif
+    return ''
+endfunction
+
+" Lookup the <SID> for a given script.  This allows for accessing
+" script-local variables.
+" Return 0 on failure.
+function! GetSID(script)
+    let path = GetScript(a:script)
+    if path != ''
+        return index(ScriptPaths(), path) + 1
+    endif
+    return 0
+endfunction
+
+" Lookup symbol in s: of given script.
+" Uses GetSID(script) to locate the <SID> of the given script; if found,
+" creates the script-local name ('<SNR>' . sid . '_' . symbol).
+function! GetSymbol(script, symbol)
+    let sid = GetSID(a:script)
+    if sid > 0
+        return '<SNR>' . sid . '_' . a:symbol
+    endif
+    return ''
+endfunction
+
 " -------------------------------------------------------------
 " runtimepath manipulation
 " -------------------------------------------------------------
 
+" Escape commas and backslashes in path.
+function! PathEscape(path)
+    return escape(a:path, ',\')
+endfunction
+
+" Un-escape commas and backslashes in path.
+function! PathUnescape(path)
+    " Very magic.
+    let rex = '\v'
+
+    " Find escaping backslash, capture following backslash or a comma.
+    let rex .= '\\([\\,])'
+
+    return substitute(a:path, rex, '\1', "g")
+endfunction
+
+" Join paths into comma-separated path string.
+"   Backslashes and commas will be escaped in final string.
+"   Arguments are individual strings or lists of strings.
+function! PathJoin(...)
+    let paths = Flatten(a:000)
+    let paths = map(paths, 'PathEscape(v:val)')
+    let path = join(paths, ",")
+    return path
+endfunction
+
+" Split comma-separated path string into a list.
+"   Honors escaped backslashes and commas.
+function! PathSplit(path)
+    " Split regex: Very magic.
+    let rex = '\v'
+
+    " Begin match after a non-backslash.
+    let rex .= '\\@<!'
+
+    " Match an zero or more pairs of backslashes; each pair
+    " represents a single escaped backslash.
+    let rex .= '%(\\\\)*'
+
+    " Now set start-of-match and require a comma (which is necessarily not
+    " escaped).
+    let rex .= '\zs,'
+
+    let paths = split(a:path, rex)
+
+    " Unescape individual paths.
+    let paths = map(paths, 'PathUnescape(v:val)')
+    return paths
+endfunction
+
 function! RtpPrepend(path)
     if isdirectory(a:path)
-        let &runtimepath = a:path . "," . &runtimepath
-        if isdirectory(a:path . '/after')
-            let &runtimepath = &runtimepath . "," . a:path . "/after"
+        let &runtimepath = PathEscape(a:path) . "," . &runtimepath
+        let after = a:path . "/after"
+        if isdirectory(after)
+            let &runtimepath = &runtimepath . "," . PathEscape(after)
         endif
     endif
 endfunction
 
+" Append path later in &runtimepath than refPath (similarly for path/after).
+" - Non-existing paths are not added to &runtimepath.
+" - If refPath does not exist, path is inserted at start of &runtimepath.
+" - If refPath/after does not exist, path/after is added to end of &runtimepath.
+function! RtpAppend(path, refPath)
+    if isdirectory(a:path)
+        let rtpParts = PathSplit(&runtimepath)
+        let i = index(rtpParts, a:refPath)
+        if i >= 0
+            call insert(rtpParts, a:path, i + 1)
+        else
+            call insert(rtpParts, a:path, 0)
+        endif
+        let after = a:path . "/after"
+        if isdirectory(after)
+            let i = index(rtpParts, a:refPath . "/after")
+            if i >= 0
+                call insert(rtpParts, after, i)
+            else
+                call add(rtpParts, after)
+            endif
+        endif
+        let &runtimepath = PathJoin(rtpParts)
+    endif
+endfunction
+
+" If script exists, source it.
+function! Source(script)
+    let expandedPath = expand(a:script)
+    if filereadable(expandedPath)
+        execute 'source ' . expandedPath
+    endif
+endfunction
+
+" Inserts directory "path" right after $VIMUSERFILES in &runtimepath. If
+" "path/after" exists, it will be inserted just before $VIMUSERFILES/after (or
+" appended to the end of &runtimepath if $VIMUSERFILES/after is not in
+" &runtimepath).
+"
+" The goal is to allow inheriting another user's configuration. This will get
+" &runtimepath fixed up correctly, but you still need to source the before and
+" after scripts within your before and after scripts, respectively.
+function! RtpInherit(path)
+    call RtpAppend(a:path, $VIMUSERFILES)
+endfunction
+
 " -------------------------------------------------------------
-" Pathogen plugin management (part one)
-" -------------------------------------------------------------
-
-" A couple of bundles must be initialized early for use in |VIMRC_BEFORE|
-" scripts.
-
-runtime bundle/pathogen/autoload/pathogen.vim
-
-" The calls to expand() below launder the slashes to backslashes
-" on Windows as well as expand environment variables.  This is
-" helpful to ensure that pathogen does not re-infect these plugins
-" (since pathogen doesn't normalize the slashes during comparisons).
-
-" We'd like to detect fonts in |VIMRC_BEFORE|.
-call pathogen#surround(expand("$VIMFILES/bundle/fontdetect"))
-
-" We'd like to set colorschemes in |VIMRC_BEFORE|.
-call pathogen#surround(expand("$VIMFILES/bundle/colorsamplerpack"))
-
-" Now restore $VIMFILES area to surround the other bundles, giving it higher
-" priority than the added bundles.
-call pathogen#surround($VIMFILES)
-
-" -------------------------------------------------------------
-" Customizing environment variables
+" Per-user customization pre-setup
 " -------------------------------------------------------------
 
 " NOTE: Several environment variables follow that may be customized.
@@ -77,8 +331,63 @@ call pathogen#surround($VIMFILES)
 " Environment variables are used instead of Vim variables to allow
 " configuration at the operating-system level outside of Vim.
 
-" If local customizations directory exists, it takes precedence.
-call RtpPrepend($VIMFILES . "/local")
+" VIMUSER defaults to the logged-in user, but may be overridden to allow
+" multiple user to share the same overrides (e.g., to let "root" share settings
+" with another user).
+if $VIMUSER == ""
+    let $VIMUSER = expand(has('win32') ? '$USERNAME' : '$USER')
+endif
+
+" Parent directory of .vim/vimfiles (typically $HOME).
+let s:vimParent = fnamemodify($VIMFILES, ':h')
+
+let s:slashdot = has('win32') ? '/_' : '/.'
+
+if $VIMLOCALFILES == ''
+    let $VIMLOCALFILES = s:vimParent . s:slashdot . 'vimlocal'
+    if !isdirectory($VIMLOCALFILES)
+        let $VIMLOCALFILES = expand('$VIMFILES/local')
+    endif
+endif
+
+if $VIMUSERFILES == ''
+    let $VIMUSERFILES = s:vimParent . s:slashdot . 'vimuser'
+    if !isdirectory($VIMUSERFILES)
+        let $VIMUSERFILES = expand('$VIMFILES/user/$VIMUSER')
+    endif
+endif
+
+if $VIMUSERLOCALFILES == ''
+    let $VIMUSERLOCALFILES = s:vimParent . s:slashdot . 'vimuserlocal'
+endif
+
+" Define an empty g:pathogen_disabled so users can assume it always exists.
+" NOTE: This variable must be adjusted very early in your vimrc-vars.vim.
+" To disable a plugin:
+"   call add(g:pathogen_disabled, "pluginname")
+" To remove a plugin from the list:
+"   call filter(g:pathogen_disabled, 'v:val != "pluginname"')
+let g:pathogen_disabled = []
+
+" Disable an experimental plugin for users in general.
+" call add(g:pathogen_disabled, "plugin_name")
+
+" Activate pathogen in case a user would need to activate a bundle in
+" |VIMRC_VARS| as part of setting up some variable.
+
+runtime bundle/pathogen/autoload/pathogen.vim
+
+" Source |VIMRC_VARS| files (if they exist), lowest-to-highest priority order.
+" Note that $VIMUSERFILES won't yet be in the 'runtimepath'.
+call Source('$VIMLOCALFILES/vimrc-vars.vim')
+call Source('$VIMUSERFILES/vimrc-vars.vim')
+call Source('$VIMUSERLOCALFILES/vimrc-vars.vim')
+
+" Prepend override directories in lowest-to-highest priority order, so that
+" the highest priority ends up first in 'runtimepath'.
+call RtpPrepend($VIMLOCALFILES)
+call RtpPrepend($VIMUSERFILES)
+call RtpPrepend($VIMUSERLOCALFILES)
 
 " Setup an environment variable for cache-related bits.  This follows
 " XDG_CACHE_HOME by default, but can be overridden by the user.
@@ -94,69 +403,55 @@ if $VIM_CACHE_DIR == ""
     endif
 endif
 
-" VIMUSER defaults to the logged-in user, but may be overridden to allow
-" multiple user to share the same overrides (e.g., to let "root" share settings
-" with another user).
-if $VIMUSER == ""
-    let $VIMUSER = expand("$USER")
-endif
-
-" By default, don't permit old-style $VIMUSER-before.vim and $VIMUSER-after.vim.
-let s:allowOldVimuserScripts = 0
-
-" Probe for per-user directories.  To allow them to be separately
-" source-controlled, check outside $VIMFILES tree first, then inside.
-if $VIMUSERFILES == ""
-    let $VIMUSERFILES  = fnamemodify($VIMFILES, ":h")
-    if has("win32")
-        let $VIMUSERFILES .= "/_vimuser"
-    else
-        let $VIMUSERFILES .= "/.vimuser"
-    endif
-    if !isdirectory($VIMUSERFILES)
-        let $VIMUSERFILES = expand("$VIMFILES/user/$VIMUSER")
-        " For backward compatibility, allow old-style $VIMUSER-before.vim and
-        " $VIMUSER-after.vim scripts.
-        let s:allowOldVimuserScripts = 1
-    endif
-endif
-
-" VIMRC_BEFORE points directly to the script to execute.
-if $VIMRC_BEFORE == ""
-    let $VIMRC_BEFORE = expand("$VIMUSERFILES/vimrc-before.vim")
-    " For backward compatibility:
-    if !filereadable($VIMRC_BEFORE) && s:allowOldVimuserScripts
-        let $VIMRC_BEFORE = expand("$VIMFILES/user/$VIMUSER-before.vim")
-    endif
-endif
-
-" VIMRC_AFTER points directly to the script to execute.
-if $VIMRC_AFTER == ""
-    let $VIMRC_AFTER = expand("$VIMUSERFILES/vimrc-after.vim")
-    " For backward compatibility:
-    if !filereadable($VIMRC_AFTER) && s:allowOldVimuserScripts
-        let $VIMRC_AFTER = expand("$VIMFILES/user/$VIMUSER-after.vim")
-    endif
-endif
-
-" Prepend per-user directory to runtimepath (provides the highest priority).
-call RtpPrepend($VIMUSERFILES)
-
-" If it exists, source the specified |VIMRC_BEFORE| hook.
-if filereadable($VIMRC_BEFORE)
-    source $VIMRC_BEFORE
-endif
-
 " -------------------------------------------------------------
-" Pathogen plugin management (part two)
+" Pathogen bundle management
 " -------------------------------------------------------------
 
-" Infect all remaining bundles.
+" Infect all bundles.
 call pathogen#infect()
 
 " Bundles in the "pre-bundle" directories will come earlier in the path
 " than those in "bundle" directories.
 call pathogen#infect('pre-bundle/{}')
+
+" -------------------------------------------------------------
+" "vimrc-before" overrides
+" -------------------------------------------------------------
+
+" Execute in highest-to-lowest priority order, so that high-priority
+" gets the first word (and also the last word via vimrc-after).
+call Source('$VIMUSERLOCALFILES/vimrc-before.vim')
+call Source('$VIMUSERFILES/vimrc-before.vim')
+call Source('$VIMLOCALFILES/vimrc-before.vim')
+
+" In general there is no good way to reliably detect console background color.
+" However, if COLORFGBG is set and we're running in a console, we assume we can
+" trust the value of 'background'.
+function! BackgroundIsTrustworthy()
+    return !has("gui_running") && $COLORFGBG != ""
+endfunction
+
+" -------------------------------------------------------------
+" Python path management
+" -------------------------------------------------------------
+
+" Setup Python's sys.path to include any "pylib" directories found
+" as immediate children of paths in Vim's 'runtimepath'.  This allows
+" for more easily sharing Python modules.
+
+if has('python')
+function! AugmentPythonPath()
+python << endpython
+import vim
+import os
+for p in vim.eval("PathSplit(&runtimepath)"):
+    libPath = os.path.join(p, "pylib")
+    if os.path.isdir(libPath) and libPath not in sys.path:
+        sys.path.append(libPath)
+endpython
+endfunction
+call AugmentPythonPath()
+endif
 
 " =============================================================
 " Color schemes
@@ -170,20 +465,23 @@ call pathogen#infect('pre-bundle/{}')
 " colorscheme selection will take place.  To use no colorscheme at all, set
 " g:colors_name to the empty string.
 
-" If the user hadn't chosen a colorscheme, we setup a default.  Because in
-" general there is no good way to reliably detect console background color, we
-" default to assuming a dark background.  Vim does try to use the environment
-" variable COLORFGBG to guess the background color, but that variable is not
-" always set properly (especially after ``sudo`` or ``ssh``).
+" If the user hasn't chosen a colorscheme, we setup a default.  If we can't
+" trust the background color detection, we force a dark background.
 
-" Provide a default colorscheme.
 if !exists("g:colors_name")
-    if !has("gui_running") && &t_Co <= 8
-        " With only a few colors, it's better to use a simple colorscheme.
-        colorscheme elflord
+    if !BackgroundIsTrustworthy()
+        set background=dark
+    endif
+    if &background == "dark"
+        if !has("gui_running") && &t_Co <= 8
+            " With only a few colors, it's better to use a simple colorscheme.
+            colorscheme elflord
+        else
+            " Dark scheme maintained by John Szakmeister.
+            colorscheme szakdark
+        endif
     else
-        " Dark scheme maintained by John Szakmeister.
-        colorscheme szakdark
+        colorscheme nuvola
     endif
 endif
 
@@ -197,6 +495,11 @@ if !exists("g:Powerline_colorscheme")
     endif
 endif
 
+" Highlight the column just after &textwidth (unless &textwidth is zero).
+if exists('+colorcolumn')
+    set colorcolumn=+1
+endif
+
 " =============================================================
 " GUI Setup
 " =============================================================
@@ -205,15 +508,16 @@ if !exists("g:DefaultFontFamilies")
     let g:DefaultFontFamilies = []
 endif
 let g:DefaultFontFamilies += [
-            \ "PragmataPro for Powerline",
-            \ "PragmataPro",
-            \ "DejaVu Sans Mono for Powerline",
-            \ "Droid Sans Mono for Powerline",
-            \ "Consolas for Powerline",
-            \ "DejaVu Sans Mono",
-            \ "Droid Sans Mono",
-            \ "Consolas",
-            \]
+        \ "Hack",
+        \ "PragmataPro for Powerline",
+        \ "PragmataPro",
+        \ "DejaVu Sans Mono for Powerline",
+        \ "Droid Sans Mono for Powerline",
+        \ "Consolas for Powerline",
+        \ "DejaVu Sans Mono",
+        \ "Droid Sans Mono",
+        \ "Consolas",
+        \]
 
 " Font Families matching the regex patterns below have known-good Unicode
 " symbols for use with Powerline.
@@ -221,15 +525,23 @@ if !exists("g:GoodUnicodeSymbolFontFamilyPatterns")
     let g:GoodUnicodeSymbolFontFamilyPatterns = []
 endif
 let g:GoodUnicodeSymbolFontFamilyPatterns += [
-            \ '^PragmataPro\>',
-            \ '^DejaVu Sans Mono\>',
-            \ '^Droid Sans Mono\>',
-            \]
+        \ '^PragmataPro\>',
+        \ '^DejaVu Sans Mono\>',
+        \ '^Droid Sans Mono\>',
+        \]
+
+function! FontSupportsPowerlineSymbols(family)
+    if a:family =~# ' Powerline$' || a:family == 'Hack'
+        return 1
+    endif
+
+    return 0
+endfunction
 
 " Return type of Powerline symbols to use for given font family.
 " Value will be one of "fancy", "unicode", or "compatible".
 function! PowerlineSymbolsForFontFamily(family)
-    if a:family =~# ' Powerline$'
+    if FontSupportsPowerlineSymbols(a:family)
         return "fancy"
     endif
     for pattern in g:GoodUnicodeSymbolFontFamilyPatterns
@@ -240,6 +552,45 @@ function! PowerlineSymbolsForFontFamily(family)
     return "compatible"
 endfunction
 
+function! AirlineCustomizeSymbols()
+    if !exists("g:airline_symbols")
+        let g:airline_symbols = {}
+    endif
+
+    if exists("g:FontFamily") && FontSupportsPowerlineSymbols(g:FontFamily)
+        let g:airline_left_sep = "\ue0b0"
+        let g:airline_left_alt_sep = "\ue0b1"
+        let g:airline_right_sep = "\ue0b2"
+        let g:airline_right_alt_sep = "\ue0b3"
+        let g:airline_symbols.crypt = "\ue0a2"
+        let g:airline_symbols.whitespace = "\u2739"
+        let g:airline_symbols.linenr = "\ue0a1"
+        let g:airline_symbols.maxlinenr = "\u2630"
+        let g:airline_symbols.branch = "\ue0a0"
+    else
+        " let g:airline_left_sep = '»'
+        " let g:airline_left_sep = '▶'
+        " let g:airline_left_sep = '│'
+        " let g:airline_left_sep = ''
+        " let g:airline_left_sep = '>'
+        let g:airline_left_sep = ' '
+        let g:airline_left_alt_sep = '>'
+        " let g:airline_right_sep = '«'
+        " let g:airline_right_sep = '◀'
+        " let g:airline_right_sep = '│'
+        " let g:airline_right_sep = ''
+        " let g:airline_right_sep = '<'
+        let g:airline_right_sep = ' '
+        let g:airline_right_alt_sep = '<'
+        let g:airline_symbols.crypt = '🔒'
+        let g:airline_symbols.whitespace = 'WS:'
+        let g:airline_symbols.linenr = '¶'
+        let g:airline_symbols.maxlinenr = ''
+        let g:airline_symbols.branch = '⚡'
+    endif
+endfunction
+command! -bar AirlineCustomizeSymbols call AirlineCustomizeSymbols()
+
 function! SetFont()
     if !has("gui_running")
         return
@@ -248,16 +599,17 @@ function! SetFont()
         let g:FontFamily = fontdetect#firstFontFamily(g:DefaultFontFamilies)
     endif
     if !exists("g:FontSize")
-        let g:FontSize = 14
+        let g:FontSize = AdjustBaseFontSize(14)
     endif
     if g:FontFamily != "" && g:FontSize > 0
-        if has("gui_gtk2")
+        if has("gui_gtk2") || has("gui_gtk3")
             let font = g:FontFamily . " " . g:FontSize
         else
             let font = g:FontFamily . ":h" . g:FontSize
         endif
         let &guifont = font
         let g:Powerline_symbols = PowerlineSymbolsForFontFamily(g:FontFamily)
+        AirlineCustomizeSymbols
     endif
 endfunction
 command! -bar SetFont call SetFont()
@@ -268,6 +620,8 @@ if has("gui_running")
 
     " 'a' is for Autoselect mode, in which selections will automatically be
     " added to the clipboard (on Windows) or the primary selection (on Unix).
+    " This makes it hard to create a selection and then overwrite it with
+    " something from the clipboard, so we disable it.
     set guioptions-=a
 
     " 'L' causes a left-side scrollbar to automatically appear when a
@@ -279,6 +633,18 @@ if has("gui_running")
     " left-side scrollbar anyway.
     set guioptions-=L
 
+    " We don't need an always-present left-side scrollbar, either.
+    set guioptions-=l
+
+    " Remove additional GUI features that take up space unnecessarily.
+    " 'r' - right-hand scrollbar is always present.
+    set guioptions-=r
+
+    " 'R' - right-hand scrollbar is present for vertical splits.
+    set guioptions-=R
+
+    " 'm' - menu bar is present.
+    set guioptions-=m
     SetFont
 
     " Number of lines of text overall.
@@ -340,13 +706,37 @@ set timeout timeoutlen=3000
 " so if in insert mode you press <Esc>OH in console Vim (on Linux) within
 " 'ttimeoutlen' milliseconds, you'll get <Home> instead of opening a new
 " line above and inserting "H".
-" Note: 120 words per minute ==> 10 character per second ==> 100 ms between,
-" and 50 ms ==> 240 words per minute.
-" Also, Tim Pope's vim-sensible plugin uses 50 ms as a reasonable value.
-set ttimeout ttimeoutlen=50
+" Note: The previous value of 50 ms proved to be much too long once
+" support for Alt+letter mappings were added by the fixkey plugin.
+" Problems cropped up when pressing <Esc> to leave insert mode followed
+" too quickly by j or k as cursor movements.  With a long ttimeoutlen,
+" these were being interpreted as Alt-j and Alt-k.  Experimentally,
+" it seems that ttimeoutlen=5 is short enough to avoid this error
+" without causing other problems.
+set ttimeout ttimeoutlen=5
 
-" Disallow octal numbers for increment/decrement (CTRL-A/CTRL-X).
+" Configure the inactivity timeout.  After this amount of idleness, the
+" CursorHold autocmd will be invoked.  Many plugins use this autocmd to perform
+" some processing that would be too expensive to perform on each change or
+" movement.  The default value is 4000; reducing this lowers the latency for
+" plugins to refresh certain slow operations (e.g., airline's tagbar will update
+" out-of-date tag names during CursorHold).
+set updatetime=1000
+
+" Disallow octal numbers for increment/decrement (CTRL-a/CTRL-x).
 set nrformats-=octal
+
+" Perform vertically split diffs by default.
+set diffopt+=vertical
+
+" Unfortunately, do to some redirection that Vim uses underneath the hood, it
+" can hide an error status of a command.  This helps to preserve the error
+" status so v:shell_error and the command can be tested for the success.
+if $SHELL =~# "zsh"
+    let &shellpipe='2>&1 | tee "%s" ; exit ${pipestatus[1]}'
+elseif $SHELL =~# "bash"
+    let &shellpipe='2>&1 | tee "%s" ; exit ${PIPESTATUS[0]}'
+endif
 
 " -------------------------------------------------------------
 " File settings
@@ -432,6 +822,10 @@ set winaltkeys=no
 " Key settings
 " -------------------------------------------------------------
 
+" Define some convenient mapping commands.
+command! -nargs=* -bar Noxmap  nmap <args>|omap <args>|xmap <args>
+command! -nargs=* -bar Nxmap  nmap <args>|xmap <args>
+
 " Avoid the following key settings for maximum portability across terminal
 " types.  "No codes" means the terminal generates nothing for the given keys.
 " "Aliased code" means the key generates the same code as another key, making
@@ -502,25 +896,157 @@ endfunction
 nnoremap <F12> :wall<bar>call system("fifosignal " . EscapedFileDir())<CR>
 inoremap <F12> <ESC>:wall<bar>call system("fifosignal " . EscapedFileDir())<CR>
 
-" Return last selected text (as defined by `< and `>).
+" -------------------------------------------------------------
+" Support routines
+" -------------------------------------------------------------
+
+" Return regContents=[regValueAsList, regType] for given register reg.
+function! GetReg(reg)
+    return [getreg(a:reg, 1, 1), getregtype(a:reg)]
+endfunction
+
+" Work around bug in setreg() prior to Vim 7.4.725.
+" In previous versions, invoking setreg() with an empty list for the value
+" would cause an internal error.
+function! SetRegWrapper(reg, value, options)
+    if len(a:value) == 0
+        call setreg(a:reg, '', a:options)
+    else
+        call setreg(a:reg, a:value, a:options)
+    endif
+endfunction
+
+" Set register reg to regContents as returned from GetReg().
+" NOTE: Avoids changing the unnamed register '"' when reg != '"' (this is
+" an unfortunate side-effect of setting other registers).
+function! SetReg(reg, regContents)
+    let saveUnnamed = GetReg('"')
+    call SetRegWrapper(a:reg, a:regContents[0], a:regContents[1])
+    if a:reg != '"'
+        call SetRegWrapper('"', saveUnnamed[0], saveUnnamed[1])
+    endif
+endfunction
+
+" This implements a "stack" for saving values (typically registers).
+let s:Stack = []
+
+function! Push(value)
+    let s:Stack += [a:value]
+endfunction
+
+function! Pop()
+    let i = len(s:Stack) - 1
+    if i >= 0
+        let value = s:Stack[i]
+        unlet s:Stack[i]
+        return value
+    else
+        throw 'Stack Underflow'
+    endif
+endfunction
+
+" Push register 'a' onto stack; must be followed by a subsequent PopA().
+function! PushA()
+    call Push(GetReg('a'))
+endfunction
+
+" Pop register 'a' from stack as pushed by PushA().
+function! PopA()
+    call SetReg('a', Pop())
+endfunction
+
+" Return last visually selected text (as defined by `< and `>).
 function! SelectedText()
-    let regA = getreg("a")
-    let regTypeA = getregtype("a")
-    silent execute 'normal! `<v`>"ay'
+    call PushA()
+    normal! gv"ay
     let text = @a
-    call setreg("a", regA, regTypeA)
+    call PopA()
     return text
 endfunction
+
+" Return true if line is blank (i.e., contains only whitespace).
+function! IsBlank(line)
+    return a:line =~# '^\s*$'
+endfunction
+
+" Indent function that leaves things unchanged.
+" Existing (i.e., non-blank) lines keep their current indentation.
+" New (blank) lines keep the indentation level of the previous non-blank line.
+" Use via:
+"   set indentexpr=StatusQuoIndent()
+function! StatusQuoIndent()
+    " Leave non-blank lines alone at their current indentation.
+    let thisLine = getline(v:lnum)
+    if !IsBlank(thisLine)
+        return indent(thisLine)
+    endif
+
+    let lnum = prevnonblank(v:lnum - 1)
+    if lnum == 0
+        return -1
+    endif
+
+    return indent(getline(lnum))
+endfunction
+
+function! NumCpus()
+    " Mostly taken from:
+    "   http://vim.wikia.com/wiki/Auto-detect_number_of_cores_for_parallel_build
+    "
+    " Tweaked to work for Mac OS X and BSD
+
+    if !empty($NUMBER_OF_PROCESSORS)
+        " this works on Windows and provides a convenient override mechanism
+        " otherwise
+        let n = $NUMBER_OF_PROCESSORS + 0
+    elseif filereadable('/proc/cpuinfo')
+        " this works on most Linux systems
+        let n = system('grep -c ^processor /proc/cpuinfo') + 0
+    elseif executable('/usr/sbin/psrinfo')
+        " this works on Solaris
+        let n = system('/usr/sbin/psrinfo -p') + 0
+    elseif executable('/usr/sbin/sysctl')
+        " this works on FreeBSD and Mac OS X
+        let n = system('/usr/sbin/sysctl -n hw.ncpu') + 0
+    else
+        " default to single process if we can't figure it out automatically
+        let n = 1
+    endif
+
+    return n
+endfunction
+
+" -------------------------------------------------------------
+" Tab page support
+" -------------------------------------------------------------
+
+" CTRL-PageUp/CTRL-PageDown are pre-defined to switch between tabs;
+" now adding SHIFT will move the current tab.
+
+nnoremap <silent> <C-S-PageUp>   :-tabmove<CR>
+nnoremap <silent> <C-S-PageDown> :+tabmove<CR>
 
 " -------------------------------------------------------------
 " QuickFix/Location List support
 " -------------------------------------------------------------
 
-" Open QuickFix window using standard position and height.
-command! -bar Copen  execute "botright copen " . g:QuickFixWinHeight
+" Shorten filenames in all buffers.
+" E.g., /home/mike/somefile => ~/somefile
+function! ShortenFilenames()
+    " Using "cd ." (or "lcd .") will cause Vim to invoke internal
+    " function shorten_fnames().
+    if haslocaldir()
+        lcd .
+    else
+        cd .
+    endif
+endfunction
 
-" Open Location List window using standard height.
-command! -bar Lopen  execute "lopen " . g:LocListWinHeight
+" Shorten filenames when QuickFix window changes.
+augroup local_QuickFix
+    autocmd!
+    autocmd QuickfixCmdPost * call ShortenFilenames()
+augroup END
 
 " Return 1 if current window is the QuickFix window.
 function! IsQuickFixWin()
@@ -530,12 +1056,27 @@ function! IsQuickFixWin()
         " then this will succeed and the focus will stay on this window.
         " If this is a QuickFix window, there will be an exception and the
         " focus will stay on this window.
-        try
-            lopen
-        catch /E776:/
-            " This was a QuickFix window.
-            return 1
-        endtry
+        "
+        " Unfortunately, the above technique broke with newer versions of Vim
+        " ls lopen was considered to be editing the buffer.  Instead, we'll use
+        " the new win_getid() to grab the window id and then use that to check
+        " the window information to see if it's a quickfix window (it does
+        " distinguish between quickfix and loclist).
+        if exists('*win_getid')
+            let info = getwininfo(win_getid())
+            if info[0]['quickfix']
+                return 1
+            else
+                return 0
+            endif
+        else
+            try
+                noautocmd lopen
+            catch /E776:/
+                " This was a QuickFix window.
+                return 1
+            endtry
+        endif
     endif
     return 0
 endfunction
@@ -545,7 +1086,7 @@ function! IsLocListWin()
     return (&buftype == "quickfix" && !IsQuickFixWin())
 endfunction
 
-" Return window number of quickfix buffer (or zero if not found).
+" Return window number of QuickFix buffer (or zero if not found).
 function! GetQuickFixWinNum()
     let qfWinNum = 0
     let curWinNum = winnr()
@@ -558,6 +1099,11 @@ function! GetQuickFixWinNum()
     endfor
     execute "noautocmd " . curWinNum . "wincmd w"
     return qfWinNum
+endfunction
+
+" Return 1 if the QuickFix window is open.
+function! QuickFixWinIsOpen()
+    return GetQuickFixWinNum() > 0
 endfunction
 
 " Return 1 if current window's location list window is open.
@@ -582,6 +1128,48 @@ function! LocListWinIsOpen()
     return isOpen
 endfunction
 
+" Open Quickfix window.
+"   If already open, leave size alone; otherwise, open with standard size.
+function! Copen()
+    if QuickFixWinIsOpen()
+        copen
+    else
+        execute "silent botright copen " . g:QuickFixWinHeight
+    endif
+endfunction
+
+" Open QuickFix window using standard position and height.
+command! -bar Copen  call Copen()
+
+" Open Location List window.
+"   If already open, leave size alone; otherwise, open with standard size.
+function! Lopen()
+    if LocListWinIsOpen()
+        lopen
+    else
+        execute "silent lopen " . g:LocListWinHeight
+    endif
+endfunction
+
+" Open Location List window using standard height.
+command! -bar Lopen  call Lopen()
+
+" Return 1 is location list is "preferred" to QuickFix list.
+function! LocListIsPreferred()
+    let locOpen = LocListWinIsOpen()
+    let qfOpen = QuickFixWinIsOpen()
+
+    " Prefer open windows to closed windows;
+    " Otherwise, prefer the location list if it is non-empty;
+    " Otherwise, use the QuickFix list.
+    if locOpen != qfOpen
+        let useLocList = locOpen
+    else
+        let useLocList = len(getloclist(0)) > 0
+    endif
+    return useLocList
+endfunction
+
 " Goto previous or next QuickFix or Location List message.
 "   messageType = "c" (for QuickFix) or "l" (for Location List).
 "   whichMessage = "previous" or "next".
@@ -590,8 +1178,13 @@ function! GotoMessage(messageType, whichMessage)
     try
         execute a:messageType . a:whichMessage
     catch /:E42:\|:E553:/
-        echo "No " . a:whichMessage . " message"
-        return 0
+        try
+            execute a:messageType . a:messageType
+        catch /:E42:\|:E553:/
+            let typeName = (a:messageType == 'c') ? "QuickFix" : "Location List"
+            echo "No " . a:whichMessage . " " . typeName . " message"
+            return 0
+        endtry
     endtry
     " Echo empty line to clear possible previous message.
     echo ""
@@ -603,11 +1196,9 @@ endfunction
 function! GotoPrev()
     if &diff
         normal [czz
-    elseif LocListWinIsOpen()
+    elseif LocListIsPreferred()
         call GotoMessage("l", "previous")
     else
-        Copen
-        wincmd p
         call GotoMessage("c", "previous")
     endif
 endfunction
@@ -616,19 +1207,17 @@ endfunction
 function! GotoNext()
     if &diff
         normal ]czz
-    elseif LocListWinIsOpen()
+    elseif LocListIsPreferred()
         call GotoMessage("l", "next")
     else
-        Copen
-        wincmd p
         call GotoMessage("c", "next")
     endif
 endfunction
 
 " Setup previous/next browsing using F4/Shift-F4.
-inoremap <silent> <F4> <C-O>:call GotoNext()<CR>
+inoremap <silent> <F4> <C-o>:call GotoNext()<CR>
 nnoremap <silent> <F4>      :call GotoNext()<CR>
-inoremap <silent> <S-F4> <C-O>:call GotoPrev()<CR>
+inoremap <silent> <S-F4> <C-o>:call GotoPrev()<CR>
 nnoremap <silent> <S-F4>      :call GotoPrev()<CR>
 
 function! s:Qf2Args()
@@ -692,17 +1281,17 @@ nnoremap <silent> <M-Down> :call NMoveDown()<CR>
 nnoremap <silent> <M-k>    :call NMoveUp()<CR>
 nnoremap <silent> <M-j>    :call NMoveDown()<CR>
 
-inoremap <silent> <M-Up>   <C-\><C-O>:call NMoveUp()<CR>
-inoremap <silent> <M-Down> <C-\><C-O>:call NMoveDown()<CR>
-inoremap <silent> <M-k>    <C-\><C-O>:call NMoveUp()<CR>
-inoremap <silent> <M-j>    <C-\><C-O>:call NMoveDown()<CR>
+inoremap <silent> <M-Up>   <C-\><C-o>:call NMoveUp()<CR>
+inoremap <silent> <M-Down> <C-\><C-o>:call NMoveDown()<CR>
+inoremap <silent> <M-k>    <C-\><C-o>:call NMoveUp()<CR>
+inoremap <silent> <M-j>    <C-\><C-o>:call NMoveDown()<CR>
 
-xnoremap <silent> <M-Up>   <C-C>:call VMoveUp()<CR>
-xnoremap <silent> <M-Down> <C-C>:call VMoveDown()<CR>
-xnoremap <silent> <M-k>    <C-C>:call VMoveUp()<CR>
-xnoremap <silent> <M-j>    <C-C>:call VMoveDown()<CR>
-xnoremap <silent> -        <C-C>:call VMoveUp()<CR>
-xnoremap <silent> +        <C-C>:call VMoveDown()<CR>
+xnoremap <silent> <M-Up>   <C-c>:call VMoveUp()<CR>
+xnoremap <silent> <M-Down> <C-c>:call VMoveDown()<CR>
+xnoremap <silent> <M-k>    <C-c>:call VMoveUp()<CR>
+xnoremap <silent> <M-j>    <C-c>:call VMoveDown()<CR>
+xnoremap <silent> -        <C-c>:call VMoveUp()<CR>
+xnoremap <silent> +        <C-c>:call VMoveDown()<CR>
 
 " Invoke as:
 "   WithShiftWidth(1, "normal gv<gv")
@@ -717,7 +1306,7 @@ endfunction
 " Derived from John Little's Vbs() function, posted in vim_use
 " 9/8/2010 with Subject "Re: formating".
 function! VMoveLeft()
-    if visualmode() == "\<c-v>"
+    if visualmode() == "\<C-v>"
         let s = getpos("'<")
         let e = getpos("'>")
         let fl = min([s[1], e[1]])
@@ -727,11 +1316,11 @@ function! VMoveLeft()
         let save_virtualedit = &virtualedit
         let &virtualedit = "all"
         call setpos(".", [0, fl, lc - (lc == 1 ? 0 : 1), 0])
-        execute "normal \<c-v>"
+        execute "normal \<C-v>"
         call setpos(".", [0, ll, lc - (lc == 1 ? 0 : 1), 0])
         normal x
         call setpos(".", [0, fl, fc - (fc == lc && fc != 1 ? 1 : 0), 0])
-        execute "normal \<c-v>"
+        execute "normal \<C-v>"
         call setpos(".", [0, ll, lc - (fc == lc && lc == 1 ? 0 : 1), 0])
         let &virtualedit = save_virtualedit
     else
@@ -741,7 +1330,7 @@ function! VMoveLeft()
 endfunction
 
 function! VMoveRight()
-    if visualmode() == "\<c-v>"
+    if visualmode() == "\<C-v>"
         execute "normal gvI\<Space>\<esc>"
         normal gvl
     else
@@ -755,21 +1344,93 @@ nnoremap <silent> <M-Right>    :call WithShiftWidth(1, ":>")<CR>
 nnoremap <silent> <M-h>        :call WithShiftWidth(1, ":<")<CR>
 nnoremap <silent> <M-l>        :call WithShiftWidth(1, ":>")<CR>
 
-inoremap <silent> <M-Left>     <C-\><C-O>:call WithShiftWidth(1, ":<")<CR>
-inoremap <silent> <M-Right>    <C-\><C-O>:call WithShiftWidth(1, ":>")<CR>
-inoremap <silent> <M-h>        <C-\><C-O>:call WithShiftWidth(1, ":<")<CR>
-inoremap <silent> <M-l>        <C-\><C-O>:call WithShiftWidth(1, ":>")<CR>
+inoremap <silent> <M-Left>     <C-\><C-o>:call WithShiftWidth(1, ":<")<CR>
+inoremap <silent> <M-Right>    <C-\><C-o>:call WithShiftWidth(1, ":>")<CR>
+inoremap <silent> <M-h>        <C-\><C-o>:call WithShiftWidth(1, ":<")<CR>
+inoremap <silent> <M-l>        <C-\><C-o>:call WithShiftWidth(1, ":>")<CR>
 
-xnoremap <silent> <M-Left>     <C-C>:call VMoveLeft()<CR>
-xnoremap <silent> <M-Right>    <C-C>:call VMoveRight()<CR>
-xnoremap <silent> <M-h>        <C-C>:call VMoveLeft()<CR>
-xnoremap <silent> <M-l>        <C-C>:call VMoveRight()<CR>
-xnoremap <silent> <Backspace>  <C-C>:call VMoveLeft()<CR>
-xnoremap <silent> <Space>      <C-C>:call VMoveRight()<CR>
+xnoremap <silent> <M-Left>     <C-c>:call VMoveLeft()<CR>
+xnoremap <silent> <M-Right>    <C-c>:call VMoveRight()<CR>
+xnoremap <silent> <M-h>        <C-c>:call VMoveLeft()<CR>
+xnoremap <silent> <M-l>        <C-c>:call VMoveRight()<CR>
+
+" Strip whitespace from the left.
+function! Lstrip(s)
+    return substitute(a:s, '^\s\+', '', "")
+endfunction
+
+" Strip whitespace from the right.
+function! Rstrip(s)
+    return substitute(a:s, '\s\+$', '', "")
+endfunction
+
+" Truncate string to at most length characters.
+function! TruncStr(str, length)
+    if len(a:str) < a:length
+        return a:str
+    elseif a:length > 0
+        return a:str[:(a:length - 1)]
+    else
+        return ''
+    endif
+endfunction
+
+" Return leading whitespace characters for string.
+function! LeadingWhitespace(str)
+    let remaining = Lstrip(a:str)
+    let whiteLen = len(a:str) - len(remaining)
+    return TruncStr(a:str, whiteLen)
+endfunction
+
+" Return longest common prefix of two strings s1 and s2.
+function! CommonPrefix(s1, s2)
+    let i = 0
+    while i < len(a:s1) && i < len(a:s2) && a:s1[i] == a:s2[i]
+        let i += 1
+    endwhile
+    return TruncStr(a:s1, i)
+endfunction
+
+" Given a paragraph (string with embedded newlines), remove the largest common
+" whitespace prefix from each line.
+function! DedentParagraph(para)
+    " Track trailing newline separately, since we allow split() to remove it.
+    if a:para =~# '\n$'
+        let finalNewline = "\n"
+    else
+        let finalNewline = ''
+    endif
+    let lines = split(a:para, "\n")
+    let nonEmptyLines = filter(copy(lines), 'v:val !~# ''^\s*$''')
+    if len(nonEmptyLines) > 0
+        let prefixes = map(copy(nonEmptyLines), 'LeadingWhitespace(v:val)')
+        let longestPrefix = prefixes[0]
+        let i = 1
+        while i < len(prefixes)
+            let longestPrefix = CommonPrefix(longestPrefix, prefixes[i])
+            let i = i + 1
+        endwhile
+        let skipLen = len(longestPrefix)
+        call map(lines, 'v:val[skipLen:]')
+    endif
+    return join(lines, "\n") . finalNewline
+endfunction
+
+" Yank-related mappings.
+
+" Yank to end-of-line instead of entire line (use "yy" for yanking a line).
+nnoremap <silent> Y      y$
+
+" Yank and dedent the visual selection.
+" TODO For now, assumes yanking to register 0 and that * and + are destinations.
+" Someday this should take into account the actual destination register and
+" whether such a yank should influence the clipboard.
+xnoremap <silent> Y y:let @0=DedentParagraph(@0)<CR>:let @+=@0<CR>:let @*=@0<CR>
+
 
 " Remove "rubbish" whitespace (from Andy Wokula posting).
 
-nnoremap <silent> drw :<C-U>call DeleteRubbishWhitespace()<CR>
+nnoremap <silent> drw :<C-u>call DeleteRubbishWhitespace()<CR>
 
 function! DeleteRubbishWhitespace()
     " Reduce many spaces or blank lines to one.
@@ -822,8 +1483,8 @@ function! RewrapParagraphExprVisual()
 endfunction
 
 function! RewrapParagraphExprInsert()
-    " Include undo point via CTRL-G u.
-    return "\<C-G>u\<Esc>" . RewrapParagraphExpr() . "A"
+    " Include undo point via CTRL-g u.
+    return "\<C-g>u\<Esc>" . RewrapParagraphExpr() . "A"
 endfunction
 
 nnoremap <expr> <M-q>      RewrapParagraphExpr()
@@ -838,7 +1499,7 @@ function! ClosestPos(positions)
     for p in a:positions
         if p[0] > 0
             if closestLine == 0 || closestLine > p[0] ||
-                        \ (closestLine == p[0] && closestCol > p[1])
+                    \ (closestLine == p[0] && closestCol > p[1])
                 let closestLine = p[0]
                 let closestCol = p[1]
             endif
@@ -871,33 +1532,62 @@ function! MoveToClosest()
 endfunction
 
 " Go "out" to the next closest containing thingy.
-inoremap <silent> <C-O><C-O>  <ESC>:call MoveToClosest()<CR>a
-vnoremap <silent> <C-O><C-O>  <ESC>:call MoveToClosest()<CR>a
+inoremap <silent> <C-o><C-o>  <ESC>:call MoveToClosest()<CR>a
+vnoremap <silent> <C-o><C-o>  <ESC>:call MoveToClosest()<CR>a
 
-" Map CTRL-O o in visual modes to be the same as in insert mode
+" Map CTRL-o o in visual modes to be the same as in insert mode
 " (which opens a new line below this one even when currently mid-line).
-vnoremap <silent> <C-O>o  <ESC>o
+vnoremap <silent> <C-o>o  <ESC>o
 
 " Append ;<CR> to current line.
-inoremap <silent> <C-O>;  <ESC>A;<CR>
-vnoremap <silent> <C-O>;  <ESC>A;<CR>
+inoremap <silent> <C-o>;  <ESC>A;<CR>
+vnoremap <silent> <C-o>;  <ESC>A;<CR>
 
 " Append :<CR> to current line.
-inoremap <silent> <C-O>:  <ESC>A:<CR>
-vnoremap <silent> <C-O>:  <ESC>A:<CR>
+inoremap <silent> <C-o>:  <ESC>A:<CR>
+vnoremap <silent> <C-o>:  <ESC>A:<CR>
 
 " Append .<CR> to current line.
-inoremap <silent> <C-O>.  <ESC>A.<CR>
-vnoremap <silent> <C-O>.  <ESC>A.<CR>
+inoremap <silent> <C-o>.  <ESC>A.<CR>
+vnoremap <silent> <C-o>.  <ESC>A.<CR>
 
 " Append .<CR> to current line unless overridden by filetype-specific mapping.
-inoremap <silent> <C-O><CR>  <ESC>A.<CR>
-vnoremap <silent> <C-O><CR>  <ESC>A.<CR>
+inoremap <silent> <C-o><CR>  <ESC>A.<CR>
+vnoremap <silent> <C-o><CR>  <ESC>A.<CR>
 
 " To leave Visual or Select mode at start or end of selected text.
-snoremap <silent> <C-O><C-H> <C-G>o<C-\><C-N>i
-xnoremap <silent> <C-O><C-H>      o<C-\><C-N>i
-vnoremap <silent> <C-O><C-L>       <C-\><C-N>a
+snoremap <silent> <C-o><C-h> <C-g>o<C-\><C-n>i
+xnoremap <silent> <C-o><C-h>      o<C-\><C-n>i
+vnoremap <silent> <C-o><C-l>       <C-\><C-n>a
+
+" Strip whitespace left of cursor (only if non-blank at or after cursor).
+function! StripWhiteLeftOfCursor()
+    let c = col(".")
+    if c > 1
+        let s = getline(line("."))
+        let unstrippedLeftS = s[0 : c-2]
+        let leftS = Rstrip(unstrippedLeftS)
+        let rightS = s[c - 1 : ]
+        if leftS != unstrippedLeftS && !IsBlank(rightS)
+            " Setting left-side first brings cursor over as needed.
+            call setline(line("."), leftS)
+            call setline(line("."), leftS . rightS)
+        endif
+    endif
+    " Return empty string so it may be called from insert mode via <C-r>=.
+    return ""
+endfunction
+
+" Use <C-r>=FunctionCall()<CR> idiom to avoid leaving insert mode.  Using
+" <C-o>:call FunctionCall()<CR> clobbers the virtual indentation that gets
+" added as part of automatic indentation.
+" Avoid remapping this because the "endwise" plugin will append to this
+" definition when it loads, and after a :source of this file, an unconditional
+" :inoremap disables endwise's hook.
+if !hasmapto('<CR>', 'i')
+    inoremap <CR>  <C-r>=StripWhiteLeftOfCursor()<CR><CR>
+endif
+
 
 " Move vertically by screen lines instead of physical lines.
 " Exchange meanings for physical and screen motion keys.
@@ -912,7 +1602,7 @@ nnoremap j           gj
 xnoremap j           gj
 nnoremap <Down>      gj
 xnoremap <Down>      gj
-inoremap <silent> <Down> <C-R>=pumvisible() ? "\<lt>Down>" : "\<lt>C-o>gj"<CR>
+inoremap <silent> <Down> <C-r>=pumvisible() ? "\<lt>Down>" : "\<lt>C-o>gj"<CR>
 nnoremap gj          j
 xnoremap gj          j
 
@@ -921,7 +1611,7 @@ nnoremap k           gk
 xnoremap k           gk
 nnoremap <Up>        gk
 xnoremap <Up>        gk
-inoremap <silent> <Up>   <C-R>=pumvisible() ? "\<lt>Up>" : "\<lt>C-o>gk"<CR>
+inoremap <silent> <Up>   <C-r>=pumvisible() ? "\<lt>Up>" : "\<lt>C-o>gk"<CR>
 nnoremap gk          k
 xnoremap gk          k
 
@@ -958,36 +1648,36 @@ nnoremap ]N :call GotoConflictMarker(1, 0)<CR>
 " Command-line editing.
 " To match Bash, setup Emacs-style command-line editing keys.
 " This loses some Vim functionality.  The original functionality can
-" be had by pressing CTRL-O followed by the original key.  E.g., to insert
-" all matching filenames (originally <C-A>), do <C-O><C-A>.
-cnoremap <C-A>      <Home>
-cnoremap <C-B>      <Left>
-cnoremap <C-D>      <Del>
-cnoremap <C-F>      <Right>
-cnoremap <C-N>      <Down>
-cnoremap <C-P>      <Up>
+" be had by pressing CTRL-o followed by the original key.  E.g., to insert
+" all matching filenames (originally <C-a>), do <C-o><C-a>.
+cnoremap <C-a>      <Home>
+cnoremap <C-b>      <Left>
+cnoremap <C-d>      <Del>
+cnoremap <C-f>      <Right>
+cnoremap <C-n>      <Down>
+cnoremap <C-p>      <Up>
 cnoremap <M-b>      <S-Left>
 cnoremap <M-f>      <S-Right>
 
-cnoremap <C-O><C-A> <C-A>
-cnoremap <C-O><C-B> <C-B>
-cnoremap <C-O><C-D> <C-D>
-cnoremap <C-O><C-F> <C-G>
-cnoremap <C-O><C-N> <C-N>
-cnoremap <C-O><C-P> <C-P>
+cnoremap <C-o><C-a> <C-a>
+cnoremap <C-o><C-b> <C-b>
+cnoremap <C-o><C-d> <C-d>
+cnoremap <C-o><C-f> <C-g>
+cnoremap <C-o><C-n> <C-n>
+cnoremap <C-o><C-p> <C-p>
 
-" Use CTRL-G to bring up the command-line window.
-let &cedit = "<C-G>"
+" Use CTRL-g to bring up the command-line window.
+let &cedit = "<C-g>"
 
 " Original meanings:
-" <C-A>   Insert all matching filenames.
-" <C-B>   <Home>.
-" <C-D>   List matching names
-" <C-F>   Edit command-line history.
-" <C-G>   Nothing.
-" <C-N>   Next match after wildchar, or recall next command-line history.
-" <C-O>   Nothing.
-" <C-P>   Prev. match after wildchar, or recall prev. command-line history.
+" <C-a>   Insert all matching filenames.
+" <C-b>   <Home>.
+" <C-d>   List matching names
+" <C-f>   Edit command-line history.
+" <C-g>   Nothing.
+" <C-n>   Next match after wildchar, or recall next command-line history.
+" <C-o>   Nothing.
+" <C-p>   Prev. match after wildchar, or recall prev. command-line history.
 
 " Work around bug on Fedora (resetting guifont seems to fix it).
 function! ResetGuiFont()
@@ -1001,7 +1691,7 @@ function! RefreshScreen()
     endif
 endfunction
 command! RefreshScreen :call RefreshScreen()
-nnoremap <silent> <C-L> :RefreshScreen<CR>:nohlsearch<CR><C-L>
+nnoremap <silent> <C-l> :RefreshScreen<CR>:nohlsearch<CR><C-l>
 
 " Work-around slow pasting to command-line; avoid a command-line
 " re-draw on every character entered by turning off Arabic shaping
@@ -1061,10 +1751,53 @@ set whichwrap=b,s,<,>,[,]
 
 set wildmode=longest,list
 
-" List of extensions to ignore when using wildcard matching.
-set wildignore=*.o,*.obj,*.a,*.lib,*.so,*~,*.bak,*.swp,tags,*.opt,*.ncb
-            \,*.plg,*.elf,cscope.out,*.ecc,*.exe,*.ilk
-            \,export,build,_build
+" Notes about 'wildignore' patterns:
+" - ``*`` matches directory characters (unlike for shell); there is no ``**``.
+"
+" - A pattern without a slash will be compared against basename; with a slash,
+"   it will be compared against the expanded (absolute) path.  So in the absence
+"   of a slash in the pattern, ``*`` will never be presented a slash character
+"   to match against, which makes ``*`` equivalent to what the shell provides in
+"   this specific case.
+" - To prevent descent into a directory named DIRNAME, it is sufficient to
+"   use the bare name DIRNAME (without slashes or asterisks).  This allows
+"   the user to explicitly visit paths within DIRNAME if desired, e.g., with
+"   a directory named 'top' containing only 'DIRNAME/somefile', then:
+"
+"     echo glob('top/*') -> returns nothing
+"     echo glob('top/DIRNAME/*') -> returns /.../top/DIRNAME/somefile
+"
+" - To permanently ban DIRNAME from appearing as a directory component in a
+"   longer path, use '*/DIRNAME/*', but note that it won't match the directory
+"   DIRNAME itself (with no following slash); for that, you must use a bare
+"   DIRNAME in addition, e.g.::
+"
+"     set wildignore=DIRNAME,*/DIRNAME/*
+"
+"   Generally, just using the bare DIRNAME is preferred.
+
+" Setup 'wildignore' property.  This is used for many kinds of filename matching
+" in Vim.  In particular, it's used by some VCS plugins to detect the presence
+" of .git/.hg/etc directories, so those directories shouldn't be ignored using
+" 'wildignore'.
+
+" *NOTE* When changing 'wildignore' below, consider making corresponding changes
+" to $VIMFILES/etc/agignore.
+
+" Ignore some Vim-related artifacts.
+set wildignore+=*.swp,tags,cscope.out
+
+" Ignore common file backup extensions.
+set wildignore+=*~,*.bak
+
+" Ignore some binary build artifacts for Unix.
+set wildignore+=*.o,*.a,*.so,*.elf
+
+" Ignore some binary build artifacts for Windows.
+set wildignore+=*.obj,*.lib,*.exe,*.opt,*.ncb,*.plg,*.ilk
+
+" Ignore some build-related directories.
+set wildignore+=build,_build,export,pkgexp
 
 " Ignore some Python artifacts.
 set wildignore+=*.pyc,*.egg-info
@@ -1072,8 +1805,8 @@ set wildignore+=*.pyc,*.egg-info
 " Ignore some Linux-kernel artifacts.
 set wildignore+=*.ko,*.mod.c,*.order,modules.builtin
 
-" Ignore some java-related files.
-set wildignore+=*.class,classes/**,*.jar
+" Ignore some Java and Clojure-related files.
+set wildignore+=*.class,classes,*.jar,.lein-*
 
 " Ignore debug symbols on Mac OS X.
 set wildignore+=*.dSYM
@@ -1097,7 +1830,7 @@ set wildignore+=*.dSYM
 "   sesdir - change directory to that of the session file.
 
 set sessionoptions=blank,buffers,curdir,folds,help,resize,slash
-            \,tabpages,unix,winpos,winsize
+        \,tabpages,unix,winpos,winsize
 
 
 " Setup undofile capability if available.
@@ -1145,20 +1878,6 @@ set completeopt=longest,menuone
 
 set complete=.,w,b,u,t
 
-" TODO Cleanup these mappings (Make them work, or remove them).
-" Remap <CR> such that when popup menu is active, the current menu
-" option is automatically selected (as if CTRL-y were pressed), and
-" when popup is not present, normal <CR> is performed (with automatic
-" breaking of undo sequence via CTRL-g u).
-" inoremap <expr> <CR> pumvisible() ? "\<lt>C-y>" : "\<lt>C-g>u\<lt>CR>"
-
-" Remap CTRL-n to simply move to next menu option if popup menu already
-" visible, or to invoke omni completion and automatically press the
-" down arrow to ensure a menu item is always selected.
-" inoremap <expr> <C-n> pumvisible() ? "\<lt>c-n>" : "\<lt>c-n>\<lt>c-r>=pumvisible() ? \"\\<lt>down>\" : \"\"\<lt>cr>"
-
-" inoremap <expr> <m-;> pumvisible() ? "\<lt>c-n>" : "\<lt>c-x>\<lt>c-o>\<lt>c-n>\<lt>c-p>\<lt>c-r>=pumvisible() ? \"\\<lt>down>\" : \"\"\<lt>cr>"
-
 " -------------------------------------------------------------
 " Begin "inspired by mswin.vim"
 " -------------------------------------------------------------
@@ -1169,12 +1888,12 @@ set complete=.,w,b,u,t
 " SHIFT-Del is Cut
 nnoremap <S-Del>            "+dd
 vnoremap <S-Del>            "+d
-inoremap <S-Del>            <C-O>"+dd
+inoremap <S-Del>            <C-o>"+dd
 
 " CTRL-Insert is Copy
 nnoremap <C-Insert>         "+yy
 vnoremap <C-Insert>         "+y
-inoremap <C-Insert>         <C-O>"+yy
+inoremap <C-Insert>         <C-o>"+yy
 
 " SHIFT-Insert is Paste
 " Pasting blockwise and linewise selections is not possible in Insert and
@@ -1185,17 +1904,25 @@ inoremap <C-Insert>         <C-O>"+yy
 nnoremap <S-Insert>         "+gP
 exe 'vnoremap <script> <S-Insert>' paste#paste_cmd['v']
 exe 'inoremap <script> <S-Insert>' paste#paste_cmd['i']
-cnoremap <S-Insert>         <C-R>+
+cnoremap <S-Insert>         <C-r>+
 
 " CTRL-SHIFT-Insert is Paste from primary selection ("* register)
 nnoremap <C-S-Insert>       "*gP
 vnoremap <C-S-Insert>       "*gP
-inoremap <C-S-Insert>       <C-\><C-O>"*gP
-cnoremap <C-S-Insert>       <C-R>*
+inoremap <C-S-Insert>       <C-\><C-o>"*gP
+cnoremap <C-S-Insert>       <C-r>*
 
-nnoremap <M-z>  :undo<CR>
-vnoremap <M-z>  <ESC>:undo<CR>
-inoremap <M-z>  <ESC>:undo<CR>
+" Perform "undo" operation via Alt-Z, remaining in original mode if possible.
+nnoremap <M-z>  u
+vnoremap <M-z>  <ESC>ugv
+inoremap <M-z>  <C-o>u
+
+" Use <M-u><M-u> as an alias for "undo", as it's intended as an
+" easier-to-remember, easier-to-type alternative.
+nnoremap <M-u><M-u>  u
+vnoremap <M-u><M-u>  <ESC>ugv
+inoremap <M-u><M-u>  <C-o>u
+
 nmap <M-x>      <S-Del>
 vmap <M-x>      <S-Del>
 imap <M-x>      <S-Del>
@@ -1223,6 +1950,12 @@ endif
 " End "inspired by mswin.vim"
 " -------------------------------------------------------------
 
+" Break undo for some insert-mode deletion operations otherwise, an undo will
+" just remove all text from the current insert operation instead of bringing
+" back the deleted text.
+inoremap <C-w>  <C-g>u<C-w>
+inoremap <C-u>  <C-g>u<C-u>
+
 " Put from most recent yank instead of scratch register.
 xnoremap P "0P
 
@@ -1242,31 +1975,296 @@ set smartcase
 " Do not wrap around buffer when searching.
 set nowrapscan
 
-
-" Escape passed-in string for use as a search expression.
-function! MakeSearchString(str)
-    return substitute(escape(a:str, '\\/.*$^~[]'), '\n', '\\n', 'g')
-endfunction
-
-" Escape passed-in string for use as an egrep expression.
-function! MakeEgrepString(str)
-    " @todo Can't egrep for \n.
-    return substitute(escape(a:str, '\\/.*$^~[]() %#'), '\n', '\\n', 'g')
-endfunction
-
-" Initiate search of visual selection (forward '*' or backward '#').
-" E.g.:
-"   xnoremap <expr> * VisualSearch('*')
-"   xnoremap <expr> # VisualSearch('#')
-function! VisualSearch(direction)
-    if a:direction == '#'
-        let l:rhs = "y?"
-    else
-        let l:rhs = "y/"
+" Trivial file completion implementation.  It's not as good as the built-in
+" "file" completion option, but it will not muck with the command string.  The
+" built-in file completion ("-complete=file") does these undesirable things:
+" - Always expands certain special strings unless they are backslash-escaped,
+"   even if they are inside shell quotes (e.g., $ENVIRONMENT_VARIABLES,
+"   characters such as '%' and '#', `backticks`, etc.).
+" - Uses backslashes to escape spaces in filenames even though that's not useful
+"   with system() on Windows.
+" Unfortunately, it's not possible to replicate the good features of the
+" built-in file completion using ``-complete=customlist``, since Vim will always
+" generate the "argLead" argument based on its own model of generic argument
+" splitting.  Therefore, when the user types "some/path/<Tab>", the list
+" of completions will always have "some/path/" at the start (e.g.,
+" "some/path/file1", "some/path/file2", etc.), unlike the built-in completion
+" that knows to start the effective "argLead" value after the final path
+" separator yielding shorter completions (e.g., "file1", "file2", etc.).  Fixing
+" this would require changes to the core Vim completion model.
+function! FileCompleteList(argLead, cmdLine, cursorPos)
+    let pathsep = '/'
+    if exists("+shellslash") && !&shellslash
+        let pathsep = '\'
     endif
-    let l:rhs = l:rhs . "\<C-R>=MakeSearchString(@\")\<CR>\<CR>gV"
-    return l:rhs
+    let comps = glob(a:argLead . '*', 0, 1)
+    call map(comps,'isdirectory(v:val) ? v:val . pathsep : v:val')
+    return sort(comps)
 endfunction
+
+" =============================================================
+" findx-related commands
+" =============================================================
+
+function! GrepperWrapper(tool, query)
+    Copen
+    execute 'Grepper -noopen -tool ' . a:tool . ' -query ' . a:query
+endfunction
+
+command! -nargs=* -complete=customlist,FileCompleteList Findx
+        \ call GrepperWrapper('findx', <q-args> == '' ? '.' : <q-args>)
+command! -nargs=* -complete=customlist,FileCompleteList FFX
+        \ call GrepperWrapper('ffx', <q-args> == '' ? '.' : <q-args>)
+command! -nargs=+ -complete=customlist,FileCompleteList FFG
+        \ call GrepperWrapper('ffg', '-n ' . <q-args>)
+
+" =============================================================
+" ack utility
+" =============================================================
+
+" Default to using "ack" from vimfiles, as we aim to keep it at least as
+" up-to-date as any system-provided "ack" executable.  This will avoid picking
+" up old 1.x versions of "ack" that might be found on the system.
+if !exists('g:UseSystemAck')
+    if executable('perl') == 1 && executable('python') == 1
+        " We've got enough to reliably use the "ack" in vimfiles.
+        let g:UseSystemAck = 0
+    else
+        " Better use the system-supplied ack.
+        " TODO: Should allow for "perl without python, no system ack" case.
+        let g:UseSystemAck = 1
+    endif
+endif
+
+if !exists('g:AckExecutable')
+    let g:AckExecutable = ''
+    if g:UseSystemAck
+        if executable('ack') == 1
+            let g:AckExecutable = 'ack'
+        elseif executable('ack-grep') == 1
+            let g:AckExecutable = 'ack-grep'
+        endif
+    elseif executable('perl') == 1
+        " Use the "ack" executable shipped in vimfiles.  Strawberry Perl and
+        " ActivePerl both have problems with certain arguments containing
+        " quotes.  A work-around is to chain through Python (which parses these
+        " quoted arguments correctly), as long as Python is available.
+        " Without Python, the following invocation of :Ack::
+        "   :Ack "x = ""hello"";"
+        " fails to match this line::
+        "   x = "hello";
+        " With the Python work-around, the invocation works.
+        if executable('python')
+            let g:AckExecutable = 'python ' . $VIMFILES . '/tool/execargs.py '
+        else
+            let g:AckExecutable = ''
+        endif
+        let g:AckExecutable .= 'perl ' . $VIMFILES . '/tool/ack'
+    endif
+endif
+
+" =============================================================
+" Grep tool
+" =============================================================
+
+if !exists('g:DefaultGrepTool')
+    if executable('ag') == 1
+        let g:DefaultGrepTool = 'ag'
+    elseif executable('rg') == 1
+        let g:DefaultGrepTool = 'rg'
+    elseif executable('ffg') == 1
+        let g:DefaultGrepTool = 'ffg'
+    elseif g:AckExecutable != ''
+        let g:DefaultGrepTool = 'ack'
+    else
+        let g:DefaultGrepTool = ''
+    endif
+endif
+
+" Run "best" full-featured grep tool.
+function! RunGrep(args)
+    " Invoke indirectly in case of a raised exception; without this, our
+    " "endif" below gets skipped when an exception occurs.
+    if g:DefaultGrepTool != ''
+        Copen
+        execute 'Grepper -noopen -tool ' . g:DefaultGrepTool
+                \ . ' -query ' . a:args
+    else
+        throw 'Grep Tool unavailable'
+    endif
+endfunction
+
+" Run first available of Ag! or Ack! against arguments.
+command! -nargs=* -complete=customlist,FileCompleteList G
+        \ call RunGrep(<q-args>)
+
+" =============================================================
+" Search naming conventions
+" =============================================================
+
+" "Search" is for built-in Vim search like :vimgrep.
+" "Grep" is the common dialect in many tools (ag, ack, rg, perl, ...).
+" "Posix" is POSIX regular expressions.
+" "Egrep" is POSIX extended regular expressions as found in egrep.
+
+" Escape chars in str, then replace newlines with '\n'.
+function! EolEscape(str, chars)
+    return substitute(escape(a:str, a:chars), '\n', '\\n', 'g')
+endfunction
+
+" Escape a pattern for use with a /search/.  Escapes slashes so that
+" any embedded slashes don't halt the pattern.
+" E.g.:
+"   'path/filename'
+" ==>
+"   'path\/filename'
+function! SearchEscape(pattern)
+    return escape(a:pattern, '/')
+endfunction
+
+" Escape for use with shell commands.
+" Basically this will be a bug-fixed implementation of shellescape().
+function! ShellEscape(str)
+    return shellescape(a:str)
+endfunction
+
+" Escape for use with the :Regrep command.
+function! ShellEscapeForRegrep(str)
+    " TODO Deal with <cword> also.
+    return escape(a:str, ' %#')
+endfunction
+
+" Patterns:
+" Literal       (any literal string converted to a pattern that matches)
+" Word          (Any_kind_ofWord_CouldBeHere2)
+" Lmc           (lowerMixedCase)
+" Umc           (UpperMixedCase)
+" Underscore    (underscore_separated_lowercase_with_numbers25)
+"
+" "Word" words comprise letters, numbers, and underscores, starting with a
+" non-digit.
+"
+" Lmc words comprise characters limited to letters and numbers, starting with a
+" lowercase letter and containing at least one uppercase letter.
+"
+" Umc words comprise characters limited to letters and numbers, starting with an
+" uppercase letter and containing at least one lowercase letter and one
+" additional uppercase letter.
+"
+" Underscore words comprise characters limited to lowercase letters, numbers,
+" and underscores, containing at least one lowercase letter and one number.
+
+" Create raw Search pattern for literal string.
+function! SearchRawLiteralPattern(str)
+    return EolEscape(a:str, '\^$.*[]~')
+endfunction
+
+" Create Search pattern for literal string.
+function! SearchLiteralPattern(str)
+    return SearchEscape(SearchRawLiteralPattern(a:str))
+endfunction
+
+" Create raw Grep pattern for literal string.
+function! GrepRawLiteralPattern(str)
+    return EolEscape(a:str, '\^$.*+?()[]{}|')
+endfunction
+
+" Create Grep pattern for literal string.
+function! GrepLiteralPattern(str)
+    return ShellEscape(GrepRawLiteralPattern(a:str))
+endfunction
+
+" Create raw Egrep pattern for literal string.
+function! EgrepRawLiteralPattern(str)
+    " @todo Can't egrep for \n.
+    return EolEscape(a:str, '\^$.*+?()[]{}|')
+endfunction
+
+" Create Egrep pattern for literal string.
+function! EgrepLiteralPattern(str)
+    return ShellEscapeForRegrep(EgrepRawLiteralPattern(a:str))
+endfunction
+
+" Create raw Search pattern for a "Word".
+function! SearchRawWordPattern()
+    return '\v\C<%(\l|\u|_)%(\l|\u|\d|_)*>'
+endfunction
+
+" Create Search pattern for a "Word".
+function! SearchWordPattern()
+    return SearchEscape(SearchRawWordPattern())
+endfunction
+
+" Create raw Grep pattern for a "Word".
+function! GrepRawWordPattern()
+    return '\b[a-zA-Z_][a-zA-Z0-9_]*\b'
+endfunction
+
+" Create Grep pattern for a "Word".
+function! GrepWordPattern()
+    return ShellEscape(GrepRawWordPattern())
+endfunction
+
+" Create raw Search pattern for lowerMixedCase identifiers.
+function! SearchRawLmcPattern()
+    return '\v\C<\l(\l|\d)*\u(\a|\d)*>'
+endfunction
+
+" Create Search pattern for lowerMixedCase identifiers.
+function! SearchLmcPattern()
+    return SearchEscape(SearchRawLmcPattern())
+endfunction
+
+" Create raw Grep pattern for lowerMixedCase identifiers.
+function! GrepRawLmcPattern()
+    return '\b[a-z][a-z0-9]*[A-Z][a-zA-Z0-9]*\b'
+endfunction
+
+" Create Grep pattern for lowerMixedCase identifiers.
+function! GrepLmcPattern()
+    return ShellEscape(GrepRawLmcPattern())
+endfunction
+
+" Create raw Search pattern for UpperMixedCase identifiers.
+function! SearchRawUmcPattern()
+    return '\v\C<\u(\u|\d)*\l(\l|\d)*\u(\a|\d)*>'
+endfunction
+
+" Create Search pattern for UpperMixedCase identifiers.
+function! SearchUmcPattern()
+    return SearchEscape(SearchRawUmcPattern())
+endfunction
+
+" Create raw Grep pattern for UpperMixedCase identifiers.
+function! GrepRawUmcPattern()
+    return '\b[A-Z][A-Z0-9]*[a-z][a-z0-9]*[A-Z][a-zA-Z0-9]*\b'
+endfunction
+
+" Create Grep pattern for UpperMixedCase identifiers.
+function! GrepUmcPattern()
+    return ShellEscape(GrepRawUmcPattern())
+endfunction
+
+" Create raw Search pattern for underscore_separated identifiers.
+function! SearchRawUnderscorePattern()
+    return '\v\C<\l*_+\l(\l|_)*>'
+endfunction
+
+" Create Search pattern for underscore_separated identifiers.
+function! SearchUnderscorePattern()
+    return SearchEscape(SearchRawUnderscorePattern())
+endfunction
+
+" Create raw Grep pattern for underscore_separated identifiers.
+function! GrepRawUnderscorePattern()
+    return '\b[a-z]*_+[a-z][a-z_]*\b'
+endfunction
+
+" Create Grep pattern for underscore_separated identifiers.
+function! GrepUnderscorePattern()
+    return ShellEscape(GrepRawUnderscorePattern())
+endfunction
+
 
 " Setup @/ to given pattern, enable highlighting and add to search history.
 function! SetSearch(pattern)
@@ -1278,33 +2276,58 @@ function! SetSearch(pattern)
 endfunction
 
 " Set search register @/ to unnamed ("scratch") register and highlight.
-command! -bar MatchScratch     call SetSearch(MakeSearchString(@"))
-command! -bar MatchScratchWord call SetSearch("\\<".MakeSearchString(@")."\\>")
+command! -bar MatchScratch     call SetSearch(SearchLiteralPattern(@"))
+command! -bar MatchScratchWord call SetSearch('\<' . SearchLiteralPattern(@") . '\>')
 
 " Map normal-mode '*' to just highlight, not search for next.
-" Note: Yank into @a to avoid clobbering register 0 (saving and restoring @a).
-nnoremap <silent> *  :let temp_a=@a<CR>"ayiw:MatchScratchWord<CR>
-            \:let @a=temp_a<CR>
-nnoremap <silent> g* :let temp_a=@a<CR>"ayiw:MatchScratch<CR>
-            \:let @a=temp_a<CR>
-xnoremap <silent> *  <ESC>:let temp_a=@a<CR>gv"ay:MatchScratch<CR>
-            \:let @a=temp_a<CR>
+" Note: Yank into @a to avoid clobbering register 0.
+nnoremap <silent> * :call PushA()<CR>"ayiw:MatchScratchWord<CR>:call PopA()<CR>
+nnoremap <silent> g* :call PushA()<CR>"ayiw:MatchScratch<CR>:call PopA()<CR>
+xnoremap <silent> * <Esc>:call PushA()<CR>gv"ay:MatchScratch<CR>:call PopA()<CR>
 
-" Setup :Regrep command to search for visual selection.
-function! VisualRegrep()
-    return "y:MatchScratch\<CR>" .
-                \ ":Regrep \<C-R>=MakeEgrepString(@\")\<CR>"
+" :Regrep of word under cursor.
+nnoremap <F3> :call PushA()<CR>"ayiw:MatchScratchWord<CR>:call PopA()<CR>
+        \:Regrep \<<C-r>=EgrepLiteralPattern(@")<CR>\>
+" :Regrep of visual selection.
+xnoremap <F3> <Esc>:call PushA()<CR>gv"ay:MatchScratch<CR>:call PopA()<CR>
+        \:Regrep <C-r>=EgrepLiteralPattern(@")<CR>
+
+nnoremap # :call PushA()<CR>"ayiw:MatchScratchWord<CR>:call PopA()<CR>
+        \:G <C-r>=GrepLiteralPattern(@")<CR> -w
+xnoremap # <Esc>:call PushA()<CR>gv"ay:MatchScratch<CR>:call PopA()<CR>
+        \:G <C-r>=GrepLiteralPattern(@")<CR>
+
+function! SearchWord(...)
+    if a:0 == 0
+        let regex = SearchWordPattern()
+    else
+        let regex = '\v\C<' . join(a:000, '>|<') . '>'
+    endif
+    call SetSearch(regex)
 endfunction
+command! -nargs=* SearchWord  call SearchWord(<f-args>)
 
-" Setup :Regrep command to search for complete word under cursor.
-function! NormalRegrep()
-    return "yiw:MatchScratchWord\<CR>" .
-                \ ":Regrep \\<\<C-R>=MakeEgrepString(@\")\<CR>\\>"
-endfunction
+command! -bar SearchLmc  call SetSearch(SearchLmcPattern())
+command! -bar SearchUmc  call SetSearch(SearchUmcPattern())
+command! -bar SearchUnderscore  call SetSearch(SearchUnderscorePattern())
 
-" :Regrep of visual selection or current word under cursor.
-vnoremap <expr> <F3> VisualRegrep()
-nnoremap <expr> <F3> NormalRegrep()
+" Run :G with regex for lowerMixedCase identifiers.
+command! -nargs=* GrepLmc
+        \ SearchLmc<bar>call RunGrep(GrepLmcPattern() . ' ' . <q-args>)
+
+" Run :G with regex for UpperMixedCase identifiers.
+command! -nargs=* GrepUmc
+        \ SearchUmc<bar>call RunGrep(GrepUmcPattern() . ' ' . <q-args>)
+
+" Run :G with regex for underscore_separated identifiers.
+command! -nargs=* GrepUnderscore
+        \ SearchUnderscore<bar>
+        \ call RunGrep(GrepUnderscorePattern() . ' ' . <q-args>)
+
+
+" =============================================================
+" Folding
+" =============================================================
 
 function! FoldShowExpr()
     let maxLevel = 2
@@ -1342,18 +2365,61 @@ function! FoldRegex(foldExprFunc, regex)
 endfunction
 
 " Search (and "show") regex; fold everything else.
-command! -nargs=? Foldsearch    call FoldRegex('FoldShowExpr', <q-args>)
+command! -nargs=? FoldSearch    call FoldRegex('FoldShowExpr', <q-args>)
 
 " Fold matching lines ("hide" the matches).
 command! -nargs=? Fold          call FoldRegex('FoldHideExpr', <q-args>)
 
 " Fold away comment lines (including blank lines).
 " TODO: Extend for more than just shell comments.
-command! -nargs=? Foldcomments  Fold ^\s*#\|^\s*$
+command! -nargs=? FoldComments  Fold ^\s*#\|^\s*$
+
+" 'foldexpr' for extracting folding information from QuickFix buffer.
+" pattern - used to extract portion of QuickFix path from line.
+function! FoldQuickFixPatternFoldExpr(pattern)
+    let thisLine = getline(v:lnum)
+    let nextLine = getline(v:lnum + 1)
+    let thisKey = matchstr(thisLine, a:pattern)
+    let nextKey = matchstr(nextLine, a:pattern)
+    if thisKey != nextKey
+        return '<1'
+    else
+        return '1'
+    endif
+endfunction
+
+function! FoldQuickFixDirsFoldExpr()
+    return FoldQuickFixPatternFoldExpr('\v^.*[/\\]')
+endfunction
+
+" Fold QuickFix window entries by directory.
+"   level - initial foldlevel (0 => fold everything, 1 => expand all folds)
+function! FoldQuickFixDirs(level)
+    let &l:foldlevel = a:level
+    setlocal foldcolumn=1
+    setlocal foldmethod=expr
+    setlocal foldexpr=FoldQuickFixDirsFoldExpr()
+endfunction
+command! -count=0 FoldQuickFixDirs  call FoldQuickFixDirs(<count>)
+
+function! FoldQuickFixFilesFoldExpr()
+    return FoldQuickFixPatternFoldExpr('\v^[^|]*')
+endfunction
+
+" Fold QuickFix window entries by filename.
+"   level - initial foldlevel (0 => fold everything, 1 => expand all folds)
+function! FoldQuickFixFiles(level)
+    let &l:foldlevel = a:level
+    setlocal foldcolumn=1
+    setlocal foldmethod=expr
+    setlocal foldexpr=FoldQuickFixFilesFoldExpr()
+    setlocal foldenable
+endfunction
+command! -count=0 FoldQuickFixFiles  call FoldQuickFixFiles(<count>)
 
 " Convert certain unicode characters to ASCII equivalents in range
 " from firstLine to lastLine, included.
-function! Toascii(firstLine, lastLine)
+function! ToAscii(firstLine, lastLine)
     let prefix = "silent " . a:firstLine . "," . a:lastLine . "s"
 
     " Spaces of non-zero width.
@@ -1419,8 +2485,94 @@ function! Toascii(firstLine, lastLine)
 endfunction
 
 " Convert certain unicode characters to ASCII equivalents.
-command! -range=% Toascii  call Toascii(<line1>, <line2>)
+command! -range=% ToAscii  call ToAscii(<line1>, <line2>)
 
+
+function! ExecInPlace(cmd)
+    let pos = winsaveview()
+    execute a:cmd
+    call winrestview(pos)
+endfunction
+
+" SubInPlace(pattern, replacement, flags?, line1?, line2?)
+" Performs "in-place" substitution of pattern to replacement.
+" Defaults: flags='g', line1='1', line2='$'.
+function! SubInPlace(pattern, replacement, ...)
+    let args = VarArgs(3, a:000)
+    let flags = ListPop(args, 'g')
+    let line1 = ListPop(args, '1')
+    let line2 = ListPop(args, '$')
+    let cmd = line1 . ',' . line2 . 's/'
+    let cmd .= a:pattern . '/' . a:replacement . '/' . flags
+    call ExecInPlace(cmd)
+    call histdel("/", -1)
+endfunction
+
+
+" Convert lowerMixedCase to underscore_separated_lowercase, e.g.:
+"   "multiWordVariable" ==> "multi_word_variable"
+" If no argument is supplied, submatch(0) is assumed, allowing uses like this:
+"   :s//\=Underscore()/g
+function! Underscore(...)
+    let word = OptArg(a:000, submatch(0))
+    " Algorithm taken from Python inflection package:
+    " https://github.com/jpvanhal/inflection/blob/master/inflection.py
+    let word = substitute(word, '\v\C([A-Z]+)([A-Z][a-z])', '\1_\2', "g")
+    let word = substitute(word, '\v\C([a-z\d])([A-Z])', '\1_\2', "g")
+    let word = tolower(word)
+    return word
+endfunction
+
+
+" Convert underscore_separated_lowercase to UpperMixedCase, e.g.:
+"   "multi_word_variable" ==> "MultiWordVariable"
+" If no argument is supplied, submatch(0) is assumed, allowing uses like this:
+"   :s//\=Umc()/g
+function! Umc(...)
+    let word = OptArg(a:000, submatch(0))
+    " Algorithm taken from Python inflection package:
+    " https://github.com/jpvanhal/inflection/blob/master/inflection.py
+    let word = substitute(word, '\v\C(^|_)(.)', '\u\2', "g")
+    return word
+endfunction
+
+
+" Convert underscore_separated_lowercase to lowerMixedCase, e.g.:
+"   "multi_word_variable" ==> "multiWordVariable"
+" If no argument is supplied, submatch(0) is assumed, allowing uses like this:
+"   :s//\=Lmc()/g
+function! Lmc(...)
+    let word = Umc(OptArg(a:000, submatch(0)))
+    return tolower(word[:0]) . word[1:]
+endfunction
+
+
+function! SubArgsOrCword(line1, line2, args, replacement)
+    if len(a:args) == 0
+        let regex = '\v\C<' . expand('<cword>') . '>'
+    else
+        let regex = '\v\C<' . join(a:args, '>|<') . '>'
+    endif
+    call SubInPlace(regex, a:replacement, 'g', a:line1, a:line2)
+endfunction
+
+command! -bar -range=% -nargs=* ToUnderscore
+        \ call SubArgsOrCword(<line1>, <line2>, [<f-args>], '\=Underscore()')
+
+command! -bar -range=% -nargs=* ToUmc
+        \ call SubArgsOrCword(<line1>, <line2>, [<f-args>], '\=Umc()')
+
+command! -bar -range=% -nargs=* ToLmc
+        \ call SubArgsOrCword(<line1>, <line2>, [<f-args>], '\=Lmc()')
+
+command! -bar -range=% LmcToUnderscore
+        \ call SubInPlace(SearchLmcPattern(), '\=Underscore()', 'g',
+        \ <line1>, <line2>)
+
+" Refactor/rename identifer under cursor.
+nnoremap <M-r>iu :ToUnderscore<CR>
+nnoremap <M-r>iU :ToUmc<CR>
+nnoremap <M-r>il :ToLmc<CR>
 
 " -------------------------------------------------------------
 " Buffer manipulation
@@ -1437,12 +2589,21 @@ set hidden
 " and :set nopaste by executing :set invpaste).
 set pastetoggle=<S-F12>
 
-" Change default from unnamed register ('"') to the primary selection
-" register ("*") for general yank and put operations. Avoid autoselect mode.
-" Inspired by Tip #21.  Notice also you can append to a register and then
-" assign it to the primary selection (@*) or the clipboard (@+).  E.g.:
-"   :let @*=@a
-set clipboard=unnamed
+" For smoother integration with typical applications that use the clipboard,
+" set both "unnamed" and "unnamedplus".  This causes yanks to go to both
+" the system clipboard (because of "unnamedplus") and the X11 primary selection
+" (because of "unnamed"); in addition, puts use the clipboard as their default
+" source (because "unnamedplus" takes priority over "unnamed" for puts).
+" Disable "autoselect" mode, as that option makes it hard to create a selection
+" and then overwrite it with something from the clipboard.
+" Use "^=" to prepend these new settings to ensure they come before a possible
+" "exclude" option that must be last.
+" Note that the "unnamedplus" feature was added in Vim 7.3.74.
+set clipboard-=autoselect
+set clipboard^=unnamed
+if has('unnamedplus')
+    set clipboard^=unnamedplus
+endif
 
 " taken from tip #330 - setup sometime...
 " map <F11> :call InvertPasteAndMouse()<CR>
@@ -1471,13 +2632,13 @@ endfunction
 " While redirected, the 'more' option is reset to avoid the need
 " to press <Space> after each screen of output.
 command! -nargs=* -bar Redir
-            \ if <q-args> == "" || <q-args> ==? "end" |
-            \   set nomore |
-            \   redir END |
-            \ else |
-            \   redir <args> |
-            \   set nomore |
-            \ endif
+        \ if <q-args> == "" || <q-args> ==? "end" |
+        \   set nomore |
+        \   redir END |
+        \ else |
+        \   redir <args> |
+        \   set nomore |
+        \ endif
 
 " -------------------------------------------------------------
 " Tags
@@ -1503,9 +2664,9 @@ set tags=./tags;$HOME,tags;$HOME
 " --extra=+f, filenames are tags, too, so the following
 " mappings will work when a file isn't in the path.
 nnoremap <expr> gf empty(taglist(expand('<cfile>'))) ?
-            \ "gf" : ":ta <C-r><C-f><CR>"
+        \ "gf" : ":ta <C-r><C-f><CR>"
 nnoremap <expr> <C-w>f empty(taglist(expand('<cfile>'))) ?
-            \ "\<C-w>f" : ":stj <C-r><C-f><CR>"
+        \ "\<C-w>f" : ":stj <C-r><C-f><CR>"
 
 " Convenience for building tag files in current directory.
 command! -bar Ctags :wall|silent! !gentags
@@ -1525,6 +2686,19 @@ nnoremap g<LeftMouse>   g<C-]>
 xnoremap g<LeftMouse>   g<C-]>
 nnoremap <C-LeftMouse>  g<C-]>
 xnoremap <C-LeftMouse>  g<C-]>
+
+" Helper for adding tag files from your $HOME/.tags folder.  Useful within
+" .lvimrc files.
+function! AddTags(...)
+    let index = 1
+    while index <= a:0
+        let tagPath = expand("$HOME/.tags/") . a:{index} . ".tags"
+        if filereadable(tagPath) == 1
+            execute 'setlocal tags+=' . escape(tagPath, ' \')
+        endif
+        let index = index + 1
+    endwhile
+endfunction
 
 " -------------------------------------------------------------
 " Cscope
@@ -1579,14 +2753,14 @@ if has("cscope")
     " t - text:     find all instances of the text.
     set cscopequickfix=c-,d-,e-,i-,s-,t-
 
-    nnoremap <C-\>c :cs find c <C-R>=expand("<cword>")<CR><CR>:Copen<CR>
-    nnoremap <C-\>d :cs find d <C-R>=expand("<cword>")<CR><CR>:Copen<CR>
-    nnoremap <C-\>e :cs find e <C-R>=expand("<cword>")<CR><CR>:Copen<CR>
-    nnoremap <C-\>f :cs find f <C-R>=expand("<cfile>")<CR><CR>
-    nnoremap <C-\>g :cs find g <C-R>=expand("<cword>")<CR><CR>
-    nnoremap <C-\>i :cs find i ^<C-R>=expand("<cfile>")<CR>$<CR>:Copen<CR>
-    nnoremap <C-\>s :cs find s <C-R>=expand("<cword>")<CR><CR>:Copen<CR>
-    nnoremap <C-\>t :cs find t <C-R>=expand("<cword>")<CR><CR>:Copen<CR>
+    nnoremap <C-\>c :cs find c <C-r>=expand("<cword>")<CR><CR>:Copen<CR>
+    nnoremap <C-\>d :cs find d <C-r>=expand("<cword>")<CR><CR>:Copen<CR>
+    nnoremap <C-\>e :cs find e <C-r>=expand("<cword>")<CR><CR>:Copen<CR>
+    nnoremap <C-\>f :cs find f <C-r>=expand("<cfile>")<CR><CR>
+    nnoremap <C-\>g :cs find g <C-r>=expand("<cword>")<CR><CR>
+    nnoremap <C-\>i :cs find i ^<C-r>=expand("<cfile>")<CR>$<CR>:Copen<CR>
+    nnoremap <C-\>s :cs find s <C-r>=expand("<cword>")<CR><CR>:Copen<CR>
+    nnoremap <C-\>t :cs find t <C-r>=expand("<cword>")<CR><CR>:Copen<CR>
 endif
 
 " -------------------------------------------------------------
@@ -1599,13 +2773,88 @@ let g:QuickFixWinHeight = 10
 " Desired height of a Location List window.
 let g:LocListWinHeight = 5
 
+" Desired width in columns of each window (as laid out by :L, :L2, etc.).
+let g:WindowWidth = 80
+
+" Extra columns per window (e.g., to allow room for the two :sign columns).
+let g:ExtraWindowWidth = 2
+
+" Return number of windows that have 'relativenumber' or 'number' (or both) set.
+function! NumWindowsWithLineNumbers()
+    " Note that a local variable won't work with the :Windo command.
+    let s:numWindows = 0
+    if exists("+number")
+        Windo let s:numWindows += &number
+    endif
+    if exists("+relativenumber")
+        Windo let s:numWindows += &relativenumber
+    endif
+    return s:numWindows
+endfunction
+
+" Return number of windows using 'diff' mode.
+function! NumWindowsWithDiffMode()
+    " Note that a local variable won't work with the :Windo command.
+    let s:numWindows = 0
+    if exists("+diff")
+        Windo let s:numWindows += &diff
+    endif
+    return s:numWindows
+endfunction
+
+" Return minimum required value of 'numberwidth' to support all windows.
+function! MinNumberWidth()
+    " Note that a local variable won't work with the :Windo command.
+    let s:minNumberWidth = 0
+
+    " For 'number', the minimum width is based on biggest line number;
+    " for 'relativenumber', it's based on window height.
+    " With relativeNumber,
+    Windo let s:minNumberWidth = max([
+            \ s:minNumberWidth,
+            \ max([
+            \     (exists("+relativenumber") && &relativenumber) *
+            \       strlen(string(winheight(0))),
+            \     (exists("+number") && &number) * strlen(string(line("$")))
+            \     ])
+            \ ])
+
+    if s:minNumberWidth > 0
+        " Account for the blank column separating the number from the buffer.
+        let s:minNumberWidth += 1
+
+        " Don't drop below 'numberwidth' (or a default if it doesn't exist).
+        if exists("+numberwidth")
+            let s:minNumberWidth = max([s:minNumberWidth, &numberwidth])
+        else
+            " Vim's default number width is 4.
+            let s:minNumberWidth = max([s:minNumberWidth, 4])
+        endif
+    endif
+    return s:minNumberWidth
+endfunction
+
+" Return desired width of a single standard window.
+" May be redefined in vimrc-after.vim to customize the logic.
+function! GetWindowWidth()
+    let width = g:WindowWidth + g:ExtraWindowWidth
+    if NumWindowsWithLineNumbers() > 0
+        let width += MinNumberWidth()
+    endif
+    if NumWindowsWithDiffMode() > 0
+        let width += 2
+    endif
+    return width
+endfunction
+
 " Re-layout windows in standard fashion.
 " If zero arguments are passed, leaves number of columns unchanged.
 " If one argument is passed, it's considered the number of window columns.
 " Passing two or more arguments is illegal.
-function! s:L(...)
+" May be redefined in vimrc-after.vim to customize the logic.
+function! LayoutWindows(...)
     if a:0 > 1
-        echoerr "Invalid number of columns in s:L"
+        echoerr "Invalid number of columns in LayoutWindows"
         return
     elseif a:0 > 0
         let winColumns = a:1
@@ -1613,7 +2862,8 @@ function! s:L(...)
         let winColumns = 0
     endif
     if winColumns > 0
-        let scrColumns = 81 * winColumns - 1
+        let winWidth = GetWindowWidth()
+        let scrColumns = (winWidth + 1) * winColumns - 1
         let &columns = scrColumns
         redraw
         if &columns != scrColumns
@@ -1644,26 +2894,26 @@ function! s:L(...)
     call WinDo("if IsLocListWin() | " . llCmd . " | endif")
 
     " Make other windows equally large.
-    execute "normal \<C-W>="
+    execute "normal \<C-w>="
 endfunction
-command! -nargs=? L call s:L(<f-args>)
+command! -nargs=? L call LayoutWindows(<f-args>)
 
 " Make 1-column-wide layout.
-command! -bar L1 call s:L(1)
+command! -bar L1 call LayoutWindows(1)
 
 " Make 2-column-wide layout.
-command! -bar L2 call s:L(2)
+command! -bar L2 call LayoutWindows(2)
 
 " Make 3-column-wide layout.
-command! -bar L3 call s:L(3)
+command! -bar L3 call LayoutWindows(3)
 
 " Make 4-column-wide layout.
-command! -bar L4 call s:L(4)
+command! -bar L4 call LayoutWindows(4)
 
 " Make 5-column-wide layout.
-command! -bar L5 call s:L(5)
+command! -bar L5 call LayoutWindows(5)
 
-" Toggle quickfix window.
+" Toggle QuickFix window.
 function! QuickFixWinToggle()
     let numOpenWindows = winnr("$")
     if IsQuickFixWin()
@@ -1676,19 +2926,22 @@ function! QuickFixWinToggle()
         Copen
     endif
 endfunction
-nnoremap <silent> <C-Q><C-Q> :call QuickFixWinToggle()<CR>
+nnoremap <silent> <C-q><C-q> :call QuickFixWinToggle()<CR>
 command! -bar QuickFixWinToggle :call QuickFixWinToggle()
 
 " Toggle location list window.
 function! LocListWinToggle()
     let numOpenWindows = winnr("$")
-    lclose
+    " TODO: For now, don't use autocmd when closing a location list window,
+    " because otherwise when the location list window is focused,
+    " :lclose will fight with Syntastic's autocmd feature to reopen it.
+    noautocmd lclose
     if numOpenWindows == winnr("$")
         " Window was already closed, so open it.
         silent! Lopen
     endif
 endfunction
-nnoremap <silent> <C-Q><C-L> :call LocListWinToggle()<CR>
+nnoremap <silent> <C-q><C-l> :call LocListWinToggle()<CR>
 command! -bar LocListWinToggle :call LocListWinToggle()
 
 " Like windo but restore the current window.
@@ -1715,7 +2968,7 @@ function! TabDo(command)
 endfunction
 command! -nargs=+ -complete=command Tabdo call TabDo(<q-args>)
 
-" Force current window to be the only window (like <C-W>o).
+" Force current window to be the only window (like <C-w>o).
 " Avoids "Already only one window" error if only one window is showing.
 function! OneWindow()
     DiffClose
@@ -1726,8 +2979,8 @@ endfunction
 command! -bar OneWindow call OneWindow()
 
 " Avoid "Already only one window" errors.
-nnoremap <silent> <C-W><C-O> :OneWindow<CR>
-nnoremap <silent> <C-W>o     :OneWindow<CR>
+nnoremap <silent> <C-w><C-o> :OneWindow<CR>
+nnoremap <silent> <C-w>o     :OneWindow<CR>
 
 " -------------------------------------------------------------
 " Diff-related
@@ -1736,7 +2989,7 @@ nnoremap <silent> <C-W>o     :OneWindow<CR>
 " Taken from :help :DiffOrig.  Shows unsaved differences between
 " this buffer and original file.
 command! -bar DiffOrig OneWindow | vert new | set bt=nofile |
-            \ r ++edit # | 0d_ | diffthis | wincmd p | diffthis
+        \ r ++edit # | 0d_ | diffthis | wincmd p | diffthis | wincmd L
 
 
 " Return list of window numbers for all diff windows (in descending order).
@@ -1753,6 +3006,20 @@ function! GetDiffWinNums()
     return diffWinNums
 endfunction
 
+" Turn off diff mode for current window.
+" Understands Fugitive diff restoration.
+function! DiffOff()
+    if exists('w:fugitive_diff_restore')
+        execute w:fugitive_diff_restore
+        unlet w:fugitive_diff_restore
+    else
+        diffoff
+        setlocal noscrollbind
+        setlocal nocursorbind
+    endif
+endfunction
+command! -bar DiffOff call DiffOff()
+
 " Restore all diff windows and close them all except current window.
 " Since folding is enabled for certain kinds of diffs, folds are
 " expanded as part of restoring settings.
@@ -1764,7 +3031,7 @@ function! DiffClose()
         let name = bufname("%")
         if &modified || (curWinNum == diffWinNum)
             " Leave this window in-place, but turn off diff.
-            diffoff
+            DiffOff
             normal zR
         else
             if &buftype == "nofile" || name =~# "^fugitive:"
@@ -1808,12 +3075,157 @@ command! -bar -nargs=? Diff  call Diff(<q-args>)
 " To disable one of the specified plugins below, define the corresponding
 " g:EnableXxx variables below to be 0 (typically, this would be done in
 " the per-user VIMRC_BEFORE file; see top of this file).
-" For example, to disable the Powerline plugin, use the following:
-"   let g:EnablePowerline = 0
+" For example, to disable the UltiSnips plugin, use the following:
+"   let g:EnableUltiSnips = 0
+
+" Don't use Powerline or Airline on 8-color terminals; they don't look good.
+if !has("gui_running") && &t_Co == 8
+    let g:EnableAirline = 0
+    let g:EnablePowerline = 0
+endif
 
 if !exists("g:EnablePowerline")
     let g:EnablePowerline = 1
 endif
+
+if !exists("g:EnableAirline")
+    let g:EnableAirline = 0
+endif
+
+if g:EnableAirline
+    let g:EnablePowerline = 0
+endif
+
+if !exists("g:EnableUltiSnips")
+    let g:EnableUltiSnips = has("python") || has("python3")
+endif
+
+" -------------------------------------------------------------
+" Ack
+" -------------------------------------------------------------
+
+" Default to using "ack" from vimfiles, as we aim to keep it at least as
+" up-to-date as any system-provided "ack" executable.  This will avoid picking
+" up old 1.x versions of "ack" that might be found on the system.
+if !exists("g:UseSystemAck")
+    let g:UseSystemAck = 0
+endif
+
+" Setup default Ack options.  Unfortunately this must be done in duplication of
+" the settings in ack.vim, because they have to be part of g:ackprg which we'd
+" like to set here.  Even if g:UseSystemAck is true, we set these options here
+" to ensure they are the same regardless of which executable is chosen.
+if !exists("g:ack_default_options")
+    let g:ack_default_options = " -s -H --nocolor --nogroup --column"
+            \ . " --smart-case --follow"
+endif
+
+let g:ackprg = g:AckExecutable . g:ack_default_options
+
+" Disable QuickFix/LocationList mappings.
+let g:ack_apply_qmappings = 0
+let g:ack_apply_lmappings = 0
+
+" -------------------------------------------------------------
+" Ag
+" -------------------------------------------------------------
+
+let g:agprg="ag --column --smart-case"
+
+" Disable QuickFix/LocationList mappings.
+let g:ag_apply_qmappings = 0
+let g:ag_apply_lmappings = 0
+
+" -------------------------------------------------------------
+" Airline
+" -------------------------------------------------------------
+
+if g:EnableAirline
+" Default sections (from documentation):
+"   g:airline_section_a       (mode, crypt, paste, spell, iminsert)
+"   g:airline_section_b       (hunks, branch)
+"   g:airline_section_c       (bufferline or filename)
+"   g:airline_section_gutter  (readonly, csv)
+"   g:airline_section_x       (tagbar, filetype, virtualenv)
+"   g:airline_section_y       (fileencoding, fileformat)
+"   g:airline_section_z       (percentage, line number, column number)
+"   g:airline_section_error   (ycm_error_count, syntastic, eclim)
+"   g:airline_section_warning (ycm_warning_count, whitespace)
+
+if !exists('g:airline_symbols')
+    let g:airline_symbols = {}
+endif
+
+
+function! AirlineInit()
+    " Remove parts that are redundant or which don't change often enough to
+    " warrant perpetual space taken in the status line.
+
+    " Remove 'filetype'.
+    let g:airline_section_x = airline#section#create(['tagbar'])
+
+    " Remove 'fileencoding'.
+    let g:airline_section_y = ''
+
+    " Use smaller margins for percentage, line/column numbers.
+    " Left-justify column number.
+    let g:airline_section_z = airline#section#create([
+        \ 'windowswap', '%2p%% ',
+        \ '%{g:airline_symbols.linenr} %#__accent_bold#%3l%#__restore__#',
+        \ ':%-2v'])
+endfunction
+autocmd User AirlineAfterInit call AirlineInit()
+
+" Skip any empty airline sections, eliminating spurious '<' symbols and spaces.
+let g:airline_skip_empty_sections = 1
+
+" Avoid "SPELL" indicator.
+let g:airline_detect_spell = 0
+
+" Disable word counting; it takes too much space.  "g CTRL-G" checks on-demand.
+let g:airline#extensions#wordcount#enabled = 0
+
+" Types of whitespace violations:
+" - indent:            mixed indent within a line
+" - long:              overlong lines
+" - trailing:          trailing whitespace
+" - mixed-indent-file: different indentation in different lines
+" Default checks: ['indent', 'trailing', 'mixed-indent-file']
+let g:airline#extensions#whitespace#checks = [
+        \ 'indent', 'trailing', 'mixed-indent-file']
+
+" Don't display a message on whitespace issues.
+" let g:airline#extensions#whitespace#show_message = 0
+
+" Configure short whitespace indicators.
+let airline#extensions#whitespace#trailing_format = '$%.0s'
+let g:airline#extensions#whitespace#mixed_indent_format = 'mix%.0s'
+let g:airline#extensions#whitespace#long_format = '+%.0s'
+let g:airline#extensions#whitespace#mixed_indent_file_format = '\t%.0s'
+
+" Configure format for SyntasticStatuslineFlag() (which generates the
+" text for airline's Syntastic support).
+let g:syntastic_stl_format = '%E{%ee}%B{ }%W{%ww}'
+
+" Provide short forms of mode names.
+let g:airline_mode_map = {
+      \ '__' : '-',
+      \ 'n'  : 'N',
+      \ 'i'  : 'I',
+      \ 'R'  : 'R',
+      \ 'c'  : 'C',
+      \ 'v'  : 'V',
+      \ 'V'  : 'V⋅LINE',
+      \ "\<C-v>" : 'V⋅BLOCK',
+      \ 's'  : 'SELECT',
+      \ 'S'  : 'S⋅LINE',
+      \ "\<C-s>" : 'S⋅BLOCK',
+      \ }
+else
+    " Airline will not load if this variable is defined:
+    let g:loaded_airline = 1
+endif
+
 
 " -------------------------------------------------------------
 " BufExplorer
@@ -1821,16 +3233,6 @@ endif
 
 let g:bufExplorerShowRelativePath = 1
 let g:bufExplorerShowNoName = 1
-
-" Unmap Surround plugin's "ds" mapping during BufExplorer operation.
-augroup local_bufExplorer
-    autocmd!
-    autocmd BufEnter \[BufExplorer\] unmap ds
-    autocmd BufLeave \[BufExplorer\] nmap ds <Plug>Dsurround
-    autocmd BufEnter \[BufExplorer\] nunmap drw
-    autocmd BufLeave \[BufExplorer\] nnoremap drw
-                \ :<C-U>call DeleteRubbishWhitespace()<CR>
-augroup END
 
 " -------------------------------------------------------------
 " bufkill
@@ -1842,6 +3244,17 @@ let g:BufKillCreateMappings = 0
 " -------------------------------------------------------------
 " bufmru
 " -------------------------------------------------------------
+
+" Set key to enter BufMRU mode (override this in vimrc-before.vim).
+if !exists("g:bufmru_switchkey")
+    " NOTE: <C-^> (CTRL-^) also works without shift (just pressing CTRL-6).
+    let g:bufmru_switchkey = "<C-^>"
+endif
+
+" Use <Space><Space> as an additional map for BufMRU mode, aiming to be
+" closer to the original muscle memory of pressing a single <Space>.
+exec "nmap <Space><Space> " . g:bufmru_switchkey
+
 " Set to 1 to pre-load the number marks into buffers.
 " Set to 0 to avoid this pre-loading.
 let g:bufmru_nummarks = 0
@@ -1849,14 +3262,10 @@ let g:bufmru_nummarks = 0
 function! BufmruUnmap()
     " Remove undesirable mappings, keeping the bare minimum for fast buffer
     " switching without needing the press <Enter> to exit bufmru "mode".
-    let seq = maparg('<Space>', 'n')
-    if seq =~# '.*idxz.*'
-        let seq = matchstr(seq, '<SNR>\d\+_m_')
-        execute "silent! nunmap " . seq . "e"
-        execute "silent! nunmap " . seq . "!"
-        execute "silent! nunmap " . seq . "<Esc>"
-        execute "silent! nunmap " . seq . "y"
-    endif
+    nunmap <Plug>bufmru....e
+    nunmap <Plug>bufmru....!
+    nunmap <Plug>bufmru....<Esc>
+    nunmap <Plug>bufmru....y
 endfunction
 
 augroup local_bufmru
@@ -1886,6 +3295,17 @@ let g:ctrlp_root_markers = []
 " buffer already at the front.
 let g:ctrlp_open_multiple_files = '1vr'
 
+" Don't try to jump to another window or tab; instead, open the desired
+" buffer in the current window.  By default, this variable is undefined, which
+" is equivalent to a value of "Et":
+" "E" - On <CR>, jump to open window on any tab.
+" "t" - On <C-t>, jump to open window on current tab.
+let g:ctrlp_switch_buffer=""
+
+" The default of 10,000 files isn't enough, but as Jim points out, 640K
+" ought to be enough for anybody :-)
+let g:ctrlp_max_files = 640000
+
 " :C [path]  ==> :CtrlP [path]
 command! -n=? -com=dir C CtrlP <args>
 
@@ -1893,77 +3313,124 @@ command! -n=? -com=dir C CtrlP <args>
 command! -n=? -com=dir CD CtrlPDir <args>
 
 " Define prefix mapping for CtrlP plugin so that buffer-local mappings
-" for CTRL-P (such as in Tagbar) will override all CtrlP plugin mappings.
-nmap <C-P> <SNR>CtrlP.....
+" for CTRL-p (such as in Tagbar) will override all CtrlP plugin mappings.
+nmap <C-p> <SNR>CtrlP.....
 
 " An incomplete mapping should do nothing.
 nnoremap <SNR>CtrlP.....      <Nop>
 
-nnoremap <SNR>CtrlP.....<C-B> :<C-U>CtrlPBookmarkDir<CR>
-nnoremap <SNR>CtrlP.....c     :<C-U>CtrlPChange<CR>
-nnoremap <SNR>CtrlP.....C     :<C-U>CtrlPChangeAll<CR>
-nnoremap <SNR>CtrlP.....<C-D> :<C-U>CtrlPDir<CR>
-nnoremap <SNR>CtrlP.....<C-F> :<C-U>CtrlPCurFile<CR>
-nnoremap <SNR>CtrlP.....<C-L> :<C-U>CtrlPLine<CR>
-nnoremap <SNR>CtrlP.....<C-M> :<C-U>CtrlPMRU<CR>
-nnoremap <SNR>CtrlP.....m     :<C-U>CtrlPMixed<CR>
+nnoremap <SNR>CtrlP.....<C-b> :<C-u>CtrlPBookmarkDir<CR>
+nnoremap <SNR>CtrlP.....c     :<C-u>CtrlPChange<CR>
+nnoremap <SNR>CtrlP.....C     :<C-u>CtrlPChangeAll<CR>
+nnoremap <SNR>CtrlP.....<C-d> :<C-u>CtrlPDir<CR>
+nnoremap <SNR>CtrlP.....<C-f> :<C-u>CtrlPCurFile<CR>
+nnoremap <SNR>CtrlP.....<C-l> :<C-u>CtrlPLine<CR>
+nnoremap <SNR>CtrlP.....<C-m> :<C-u>CtrlPMRU<CR>
+nnoremap <SNR>CtrlP.....m     :<C-u>CtrlPMixed<CR>
 
 " Mnemonic: "open files"
-nnoremap <SNR>CtrlP.....<C-O> :<C-U>CtrlPBuffer<CR>
-nnoremap <SNR>CtrlP.....<C-P> :<C-U>CtrlP<CR>
-nnoremap <SNR>CtrlP.....<C-Q> :<C-U>CtrlPQuickfix<CR>
-nnoremap <SNR>CtrlP.....<C-R> :<C-U>CtrlPRoot<CR>
-nnoremap <SNR>CtrlP.....<C-T> :<C-U>CtrlPTag<CR>
-nnoremap <SNR>CtrlP.....t     :<C-U>CtrlPBufTag<CR>
-nnoremap <SNR>CtrlP.....T     :<C-U>CtrlPBufTagAll<CR>
-nnoremap <SNR>CtrlP.....<C-U> :<C-U>CtrlPUndo<CR>
-
-" Transitional mappings to migrate from historical Command-T functionality.
-" At first, redirect to CtrlP equivalent functionality.  Later, just
-" provide an error message.  Eventually, remove this mappings.
-nnoremap <leader><leader>t :<C-U>echoe "Use CTRL-P CTRL-P instead"<Bar>
-            \ sleep 1<Bar>
-            \ CtrlP<CR>
-
-nnoremap <leader><leader>b :<C-U>echoe "Use CTRL-P CTRL-O instead"<Bar>
-            \ sleep 1<Bar>
-            \ CtrlPBuffer<CR>
+nnoremap <SNR>CtrlP.....<C-o> :<C-u>CtrlPBuffer<CR>
+nnoremap <SNR>CtrlP.....<C-p> :<C-u>CtrlP<CR>
+nnoremap <SNR>CtrlP.....<C-q> :<C-u>CtrlPQuickfix<CR>
+nnoremap <SNR>CtrlP.....<C-r> :<C-u>CtrlPRoot<CR>
+nnoremap <SNR>CtrlP.....<C-t> :<C-u>CtrlPTag<CR>
+nnoremap <SNR>CtrlP.....t     :<C-u>CtrlPBufTag<CR>
+nnoremap <SNR>CtrlP.....T     :<C-u>CtrlPBufTagAll<CR>
+nnoremap <SNR>CtrlP.....<C-u> :<C-u>CtrlPUndo<CR>
 
 " Reverse move and history binding pairs:
-" - For consistency with other plugins that use <C-N>/<C-P> for moving around.
-" - Because <C-J> is bound to the tmux prefix key, so it's best to map
+" - For consistency with other plugins that use <C-n>/<C-p> for moving around.
+" - Because <C-j> is bound to the tmux prefix key, so it's best to map
 "   that key to a less-used function.
 let g:ctrlp_prompt_mappings = {
-    \ 'PrtSelectMove("j")':   ['<C-N>', '<down>'],
-    \ 'PrtSelectMove("k")':   ['<C-P>', '<up>'],
-    \ 'PrtHistory(-1)':       ['<C-J>'],
-    \ 'PrtHistory(1)':        ['<C-K>'],
-    \ }
+        \ 'PrtSelectMove("j")':   ['<C-n>', '<down>'],
+        \ 'PrtSelectMove("k")':   ['<C-p>', '<up>'],
+        \ 'PrtHistory(-1)':       ['<C-j>'],
+        \ 'PrtHistory(1)':        ['<C-k>'],
+        \ }
 
 " Maximum height of filename window.
 let g:ctrlp_max_height = 50
 
+" Reuse the current window when opening new files.
+let g:ctrlp_open_new_file = 'r'
+
+" Symlinks:
+" 0 - Do not follow symlinks.
+" 1 - Follow non-looped symlinks.
+" 2 - Follow all symlinks.
+let g:ctrlp_follow_symlinks = 1
+
 " -------------------------------------------------------------
-" tcomment
+" Easy-Align
 " -------------------------------------------------------------
 
-" Don't comment blank lines.
-let g:tcommentBlankLines = 0
+xmap <Leader>a <Plug>(EasyAlign)
+nmap <Leader>a <Plug>(EasyAlign)
 
-" Turn off the <c-_> and <Leader>_ mappings.
-let g:tcommentMapLeader1 = ''
-let g:tcommentMapLeader2 = ''
+" Setup custom alignment characters.
+"   \ - Align on backslash (such as for C/C++ line continuations).
+let g:easy_align_delimiters = {
+        \ '\':
+        \   {
+        \       'pattern':         '\\',
+        \   },
+        \ }
 
-" Setup better linewise comments for Java.
-let g:tcomment_types = {
-            \ 'java': '// %s',
-            \ }
+" -------------------------------------------------------------
+" easymotion
+" -------------------------------------------------------------
+
+" Don't use the default maps, as there are too many deviations from
+" the defaults.
+let g:EasyMotion_do_mapping = 0
+
+" Lowercase keys will match either lowercase or uppercase buffer text.
+let g:EasyMotion_smartcase = 1
+
+" Set keys for targets (removing semi-colon from default).
+let g:EasyMotion_keys = "asdghklqwertyuiopzxcvbnmfj"
+
+Noxmap   <Space>jj          <Plug>(easymotion-s)
+Noxmap   <Space>jJ          <Plug>(easymotion-s2)
+Noxmap   <Space>jl          <Plug>(easymotion-sol-bd-jk)
+
+" Setup target locations for single-line "anywhere".
+let g:EasyMotion_re_line_anywhere = '\v' .
+        \ '^$'                . '|' .
+        \ '<.'                . '|' .
+        \ '>.'                . '|' .
+        \ '\l\zs\u'           . '|' .
+        \ '_\zs.'             . '|' .
+        \ '#\zs.'
+
+" Setup target locations for "anywhere".
+let g:EasyMotion_re_anywhere = '\v' .
+        \ '^$'                . '|' .
+        \ '<.'                . '|' .
+        \ '>.'                . '|' .
+        \ '\l\zs\u'           . '|' .
+        \ '_\zs.'             . '|' .
+        \ '#\zs.'
 
 " -------------------------------------------------------------
 " fswitch
 " -------------------------------------------------------------
 
-function! SetFswitchVars(dst, locs)
+" dst - value for b:fswitchdst
+" locs - value for b:fswitchlocs
+" ... - value for b:fswitchfnames (if provided)
+function! SetFswitchVars(dst, locs, ...)
+    if a:0 == 1
+        let fnames = a:1
+        if !exists("b:fswitchfnames")
+            let b:fswitchfnames = fnames
+        endif
+    elseif a:0 > 1
+        echoerr "Invalid argument count"
+        return
+    endif
+
     if !exists("b:fswitchdst")
         let b:fswitchdst = a:dst
     endif
@@ -1977,17 +3444,24 @@ augroup local_fswitch
     " There are lots more options - :help fswitch.  We use SetFswitchVars()
     " because we don't want to override values set by a .lvimrc file.
     autocmd BufEnter *.h call SetFswitchVars(
-                \ 'c,cpp',
-                \ 'reg:/pubinc/src/'
-                \.',reg:/include/src/'
-                \.',reg:/include.*/src/'
-                \.',ifrel:|/include/|../src|')
+            \ 'c,cpp',
+            \ 'reg:/pubinc/src/'
+            \.',reg:/include/src/'
+            \.',reg:/include.*/src/'
+            \.',ifrel:|/include/|../src|')
     autocmd BufEnter *.c,*.cpp call SetFswitchVars(
-                \ 'h',
-                \ 'reg:/src/pubinc/'
-                \.',reg:/src/include/'
-                \.',reg:|src|include/**|'
-                \.',ifrel:|/src/|../include|')
+            \ 'h',
+            \ 'reg:/src/pubinc/'
+            \.',reg:/src/include/'
+            \.',reg:|src|include/**|'
+            \.',ifrel:|/src/|../include|')
+    autocmd BufEnter *.snippets call SetFswitchVars(
+            \ 'snippets.py',
+            \ '.')
+    autocmd BufEnter *.snippets.py call SetFswitchVars(
+            \ 'snippets',
+            \ '.',
+            \ '/.snippets$//')
 augroup END
 
 " Switch to the file and load it into the current window.
@@ -2026,7 +3500,47 @@ command! -bar A FSHere
 
 let Grep_Skip_Dirs = '.svn .bzr .git .hg build bak export .undo'
 let Grep_Skip_Files = '*.bak *~ .*.swp tags *.opt *.ncb *.plg ' .
-    \ '*.o *.elf cscope.out *.ecc *.exe *.ilk *.out *.pyc build.out doxy.out'
+        \ '*.o *.elf cscope.out *.ecc *.exe *.ilk *.out *.pyc ' .
+        \ 'build.out doxy.out'
+
+" -------------------------------------------------------------
+" Grepper
+" -------------------------------------------------------------
+
+let g:grepper = {}
+
+" These are the default tools.  It's a shame there's not a smoother way to
+" extend the list without pasting it here.
+let g:grepper.tools = ['rg', 'ag', 'ack', 'grep', 'findstr', 'pt', 'git']
+
+" ack.
+let g:grepper.ack = {}
+" ``--nofilter`` prevents ack from searching stdin.
+let g:grepper.ack.grepprg = g:AckExecutable . ' --nofilter --noheading --column'
+
+" prargs (just for debugging quoting issues).
+let g:grepper.tools += ['prargs']
+let g:grepper.prargs = {}
+let g:grepper.prargs.grepprg = 'prargs'
+let g:grepper.prargs.escape = ''
+
+" ffg.
+let g:grepper.tools += ['ffg']
+let g:grepper.ffg = {}
+let g:grepper.ffg.grepprg = 'ffg -Pn'
+let g:grepper.ffg.escape = '\^$.*+?()[]|'
+
+" ffx.
+let g:grepper.tools += ['ffx']
+let g:grepper.ffx = {}
+let g:grepper.ffx.grepprg = 'ffx'
+let g:grepper.ffx.grepformat = '%f'
+
+" findx.
+let g:grepper.tools += ['findx']
+let g:grepper.findx = {}
+let g:grepper.findx.grepprg = 'findx'
+let g:grepper.findx.grepformat = '%f'
 
 " -------------------------------------------------------------
 " Gundo
@@ -2041,7 +3555,30 @@ let g:gundo_close_on_revert = 1
 
 " Disable default mappings by having a pre-existing (but useless)
 " mapping to <Plug>HiLinkTrace.
-:nnoremap <SID>DisableHiLinkTrace <Plug>HiLinkTrace
+nmap <SID>DisableHiLinkTrace <Plug>HiLinkTrace
+
+" -------------------------------------------------------------
+" incsearch
+" -------------------------------------------------------------
+
+" Requires at least Vim 7.3.032:
+" https://github.com/haya14busa/incsearch.vim/issues/61
+if v:version ># 703 || (v:version is 703 && has('patch32'))
+    nmap /      <Plug>(incsearch-forward)
+    nmap ?      <Plug>(incsearch-backward)
+    nmap g/     <Plug>(incsearch-stay)
+endif
+
+" -------------------------------------------------------------
+" incsearch-fuzzy
+" -------------------------------------------------------------
+
+" Requires at least Vim 7.3.032 (probably; assuming like incsearch)
+if v:version ># 703 || (v:version is 703 && has('patch32'))
+    nmap z/     <Plug>(incsearch-fuzzy-/)
+    nmap z?     <Plug>(incsearch-fuzzy-?)
+    nmap zg/    <Plug>(incsearch-fuzzy-stay)
+endif
 
 " -------------------------------------------------------------
 " indent-guides
@@ -2101,7 +3638,14 @@ endif
 
 " Enable persistence of our decisions.
 set viminfo+=!
-let g:localvimrc_persistent = 2
+
+" 0 - Don't store and restore any decisions.
+" 1 - Store and restore decisions only for uppercase answers (Y/N/A).
+" 2 - Store and restore all decisions.
+let g:localvimrc_persistent = 1
+
+" Since localvimrc files require confirmation, don't require :sandbox.
+let g:localvimrc_sandbox = 0
 
 " -------------------------------------------------------------
 " lookupfile
@@ -2144,11 +3688,11 @@ nnoremap <silent> <M-s> :LustyJuggler<CR>
 "let g:manpageview_winopen = "reuse"
 
 function! CheckManpageview()
-    let isMan = maparg("\<Space>", "n") ==? "<C-F>"
+    let isMan = maparg("\<Space>", "n") ==? "<C-f>"
     let isInfo = maparg("H", "n") =~? "manpageview"
     if isMan
-        nnoremap <silent> <buffer> b           <C-B>
-        nnoremap <silent> <buffer> f           <C-F>
+        nnoremap <silent> <buffer> b           <C-b>
+        nnoremap <silent> <buffer> f           <C-f>
         nnoremap <silent> <buffer> <           gg
         nnoremap <silent> <buffer> >           G
     endif
@@ -2237,7 +3781,7 @@ endpython
     endfunction
 
     nnoremap gx :call <SID>SmartOpen('n')<CR>
-    xnoremap gx <C-C>:call <SID>SmartOpen('v')<CR>
+    xnoremap gx <C-c>:call <SID>SmartOpen('v')<CR>
 endif
 
 nnoremap <silent> <Leader>fe :Explore<CR>
@@ -2284,7 +3828,7 @@ endif
 "   :2013-11-11.1
 " This vimfiles-wide setting will be appended to whatever value may have been
 " set via a |VIMRC_BEFORE| file.
-let g:PowerlineRequiredCacheTag .= ":2013-11-14"
+let g:PowerlineRequiredCacheTag .= ":2015-09-11"
 
 " This file records the current Powerline "tag".
 let g:PowerlineCacheTagFile = expand('$VIM_CACHE_DIR/PowerlineCacheTag')
@@ -2320,7 +3864,7 @@ if g:EnablePowerline
         if PowerlineCacheTagRead() != g:PowerlineRequiredCacheTag
             " Wipe out all Powerline cache files.
             for p in split(glob(g:Powerline_cache_dir .
-                        \ "/Powerline_*.cache", 1), '\n')
+                    \ "/Powerline_*.cache", 1), '\n')
                 silent! call delete(p)
             endfor
             call PowerlineCacheTagWrite(g:PowerlineRequiredCacheTag)
@@ -2345,7 +3889,7 @@ if g:EnablePowerline
     call Pl#Theme#InsertSegment('fileinfo', 'before', 'tagbar:currenttag')
     call Pl#Theme#RemoveSegment('syntastic:errors')
     call Pl#Theme#InsertSegment('syntastic:errors', 'before',
-                \               'tagbar:currenttag')
+            \                   'tagbar:currenttag')
 
     " Add some non-default segments.
 
@@ -2385,7 +3929,7 @@ endif
 "   F - float Project Window.
 "   g - create <F12> mapping for toggling Project Window.
 "   i - display filename and working directory in command line.
-"   m - modify CTRL-W_o to keep Project Window visible too.
+"   m - modify CTRL-w_o to keep Project Window visible too.
 "   s - use syntax highlighting in Project Window.
 "   S - sorting for refresh and create.
 "   t - toggle size of window instead of increase-only.
@@ -2394,8 +3938,15 @@ endif
 let g:proj_flags = 'csStTv'
 let g:proj_window_width = 40
 nmap <silent> <F8>        <Plug>ToggleProject
-nmap <silent> <C-Q><C-P>  <Plug>ToggleProject
-nmap <silent> <C-Q>p      <Plug>ToggleProject
+nmap <silent> <C-q><C-p>  <Plug>ToggleProject
+nmap <silent> <C-q>p      <Plug>ToggleProject
+
+" -------------------------------------------------------------
+" Quickfix-reflector
+" -------------------------------------------------------------
+
+" Join changes within each buffer for easier :undo.
+let g:qf_join_changes = 1
 
 " -------------------------------------------------------------
 " Rainbow Parentheses
@@ -2415,52 +3966,52 @@ endfunction
 
 if &t_Co >= 256 || has("gui_running")
     let g:rbpt_colorpairs_dark = [
-                \ [129,         'purple'],
-                \ ['magenta',   'magenta1'],
-                \ [111,         'slateblue1'],
-                \ ['cyan',      'cyan1'],
-                \ [48,          'springgreen1'],
-                \ ['green',     'green1'],
-                \ [154,         'greenyellow'],
-                \ ['yellow',    'yellow1'],
-                \ [214,         'orange1'],
-                \ ]
+            \ [129,         'purple'],
+            \ ['magenta',   'magenta1'],
+            \ [111,         'slateblue1'],
+            \ ['cyan',      'cyan1'],
+            \ [48,          'springgreen1'],
+            \ ['green',     'green1'],
+            \ [154,         'greenyellow'],
+            \ ['yellow',    'yellow1'],
+            \ [214,         'orange1'],
+            \ ]
     " TODO Choose better light-background colors for rainbow parentheses.
     let g:rbpt_colorpairs_light = [
-                \ [129,         'purple'],
-                \ ['magenta',   'magenta1'],
-                \ [111,         'slateblue1'],
-                \ ['cyan',      'cyan1'],
-                \ [48,          'springgreen1'],
-                \ ['green',     'green1'],
-                \ [154,         'greenyellow'],
-                \ ['yellow',    'yellow1'],
-                \ [214,         'orange1'],
-                \ ]
+            \ [129,         'purple'],
+            \ ['magenta',   'magenta1'],
+            \ [111,         'slateblue1'],
+            \ ['cyan',      'cyan1'],
+            \ [48,          'springgreen1'],
+            \ ['green',     'green1'],
+            \ [154,         'greenyellow'],
+            \ ['yellow',    'yellow1'],
+            \ [214,         'orange1'],
+            \ ]
 else
     let g:rbpt_colorpairs_dark = [
-                \ ['magenta',   'purple'],
-                \ ['cyan',      'magenta1'],
-                \ ['green',     'slateblue1'],
-                \ ['yellow',    'cyan1'],
-                \ ['red',       'springgreen1'],
-                \ ['magenta',   'green1'],
-                \ ['cyan',      'greenyellow'],
-                \ ['green',     'yellow1'],
-                \ ['yellow',    'orange1'],
-                \ ]
+            \ ['magenta',   'purple'],
+            \ ['cyan',      'magenta1'],
+            \ ['green',     'slateblue1'],
+            \ ['yellow',    'cyan1'],
+            \ ['red',       'springgreen1'],
+            \ ['magenta',   'green1'],
+            \ ['cyan',      'greenyellow'],
+            \ ['green',     'yellow1'],
+            \ ['yellow',    'orange1'],
+            \ ]
     " TODO Choose better light-background colors for rainbow parentheses.
     let g:rbpt_colorpairs_light = [
-                \ ['magenta',   'purple'],
-                \ ['cyan',      'magenta1'],
-                \ ['green',     'slateblue1'],
-                \ ['yellow',    'cyan1'],
-                \ ['red',       'springgreen1'],
-                \ ['magenta',   'green1'],
-                \ ['cyan',      'greenyellow'],
-                \ ['green',     'yellow1'],
-                \ ['yellow',    'orange1'],
-                \ ]
+            \ ['magenta',   'purple'],
+            \ ['cyan',      'magenta1'],
+            \ ['green',     'slateblue1'],
+            \ ['yellow',    'cyan1'],
+            \ ['red',       'springgreen1'],
+            \ ['magenta',   'green1'],
+            \ ['cyan',      'greenyellow'],
+            \ ['green',     'yellow1'],
+            \ ['yellow',    'orange1'],
+            \ ]
 endif
 call AdaptRainbow()
 
@@ -2488,6 +4039,7 @@ let g:session_autoload = 'yes'
 let g:session_autosave = 'no'
 let g:session_verbose_messages = 0
 let g:session_command_aliases = 1
+let g:session_persist_font = 0
 
 " Lifted from session.
 function! s:unescape(s)
@@ -2510,7 +4062,7 @@ function! SaveSessionNoDefault(name, bang, command) abort
         endif
         if empty(name)
             let defaultSessionFound = 0
-            for session in xolox#session#get_names()
+            for session in xolox#session#get_names(0)
                 if session ==? g:session_default_name
                     let defaultSessionFound = 1
                     break
@@ -2528,15 +4080,15 @@ endfunction
 
 function! OverrideSaveSession()
     command! -bar -bang -nargs=?
-                \ -complete=customlist,xolox#session#complete_names
-                \ SaveSession
-                \ call SaveSessionNoDefault(<q-args>, <q-bang>, 'SaveSession')
+            \ -complete=customlist,xolox#session#complete_names
+            \ SaveSession
+            \ call SaveSessionNoDefault(<q-args>, <q-bang>, 'SaveSession')
     if g:session_command_aliases
         command! -bar -bang -nargs=?
-                    \ -complete=customlist,xolox#session#complete_names
-                    \ SessionSave
-                    \ call SaveSessionNoDefault(
-                    \   <q-args>, <q-bang>, 'SessionSave')
+                \ -complete=customlist,xolox#session#complete_names
+                \ SessionSave
+                \ call SaveSessionNoDefault(
+                \   <q-args>, <q-bang>, 'SessionSave')
     endif
 endfunction
 
@@ -2546,8 +4098,387 @@ augroup local_session
 augroup END
 
 " -------------------------------------------------------------
+" Signature
+" -------------------------------------------------------------
+
+" Disable toggling of marks and markers.
+let g:SignatureForceMarkPlacement = 1
+let g:SignatureForceMarkerPlacement = 1
+
+" Disable maps that hide valuable Vim built-in functionality for jumping to
+" the start or end of recent yanks or changes:
+"   '[, '], `[, and `]
+" To restore this functionality, unlet g:SignatureMap in your vimrc-after.vim
+" file.
+let g:SignatureMap = {
+        \ 'GotoNextLineAlpha'  :  "",
+        \ 'GotoPrevLineAlpha'  :  "",
+        \ 'GotoNextSpotAlpha'  :  "",
+        \ 'GotoPrevSpotAlpha'  :  "",
+        \ }
+
+" -------------------------------------------------------------
+" Sneak
+" -------------------------------------------------------------
+
+" Future ideas on sneak are found here:
+" https://github.com/justinmk/vim-sneak/issues/88
+
+" Reduce label characters to set least likely to be pressed after landing
+" at desired location (see issue #88 above; suggested set with "g" removed).
+let g:sneak#target_labels = "sfjktunbqz/SFKGHLTUNBRMQZ?"
+
+" Enable "streak" mode.
+let g:sneak#streak = 1
+
+" 0 : Always case-sensitive.
+" 1 : Case sensitivity is determined by 'ignorecase' and 'smartcase'.
+let g:sneak#use_ic_scs = 1
+
+" Avoid default {operator}z mapping.
+let g:sneak#textobject_z = 0
+
+" Use <Space>s and <Space>S for forward and backward sneak, and use streak mode
+" for operators.
+Nxmap   <Space>s        <Plug>Sneak_s
+Nxmap   <Space>S        <Plug>Sneak_S
+omap    <Space>s        <Plug>(SneakStreak)
+omap    <Space>S        <Plug>(SneakStreakBackward)
+
+" -------------------------------------------------------------
 " Syntastic
 " -------------------------------------------------------------
+
+function! SyntasticBufferMode(...)
+    if a:0 == 0
+        let bufferMode = GetVar("b:syntastic_mode", "inherited")
+        echo "Buffer mode=" . bufferMode
+    else
+        let bufferMode = a:1
+        if ListContains(split("active passive inherited"), bufferMode)
+            if bufferMode == "inherited"
+                unlet! b:syntastic_mode
+            else
+                let b:syntastic_mode = bufferMode
+            endif
+            SyntasticReset
+        else
+            echoerr "Invalid mode " . bufferMode
+        endif
+    endif
+endfunction
+
+function! SyntasticBufferModeComplete(argLead, cmdLine, cursorPos)
+    return "active\npassive\ninherited"
+endfunction
+
+command! -n=? -bar -complete=custom,SyntasticBufferModeComplete
+        \ SyntasticBufferMode call SyntasticBufferMode(<f-args>)
+
+
+function! SyntasticBufferChecking(...)
+    if a:0 == 0
+        if !exists("b:syntastic_skip_checks")
+            let checkingMode = "inherited"
+        else
+            let checkingMode = b:syntastic_skip_checks ? "off" : "on"
+        endif
+        echo "Buffer checking=" . checkingMode
+    else
+        let checkingMode = a:1
+        if ListContains(split("on off inherited"), checkingMode)
+            if checkingMode == "inherited"
+                unlet! b:syntastic_skip_checks
+            else
+                let b:syntastic_skip_checks = (checkingMode == "off")
+                if b:syntastic_skip_checks
+                    SyntasticReset
+                endif
+            endif
+        else
+            echoerr "Invalid argument " . checkingMode
+        endif
+    endif
+endfunction
+
+function! SyntasticBufferCheckingComplete(argLead, cmdLine, cursorPos)
+    return "on\noff\ninherited"
+endfunction
+
+command! -n=? -bar -complete=custom,SyntasticBufferCheckingComplete
+        \ SyntasticBufferChecking call SyntasticBufferChecking(<f-args>)
+
+
+" Sadly, if b:syntastic_quiet_messages is defined, Syntastic will completely
+" ignore g:syntastic_quiet_messages rather than merging the two dictionaries
+" together and giving priority to the buffer-local keys.  This means we can't
+" truly provide an "inherited" functionality for each key.  Instead, the first
+" time the buffer-local dictionary is required, we copy the global dictionary in
+" its entirety.  Any changed made to the buffer-local dictionary work as
+" expected, except that settings intended to make a given key be "inherited"
+" simply copy the current setting from the global dictionary into the
+" buffer-local dictionary.  Subsequent changes to the global settings will not
+" automatically be reflected into the buffer-local settings.
+
+function! SyntasticBufferQuietMessages()
+    let qm = GetVar("b:syntastic_quiet_messages",
+            \ deepcopy(g:syntastic_quiet_messages))
+    return qm
+endfunction
+
+function! SyntasticBufferQuietGet(varName, defaultValue)
+    let qm = SyntasticBufferQuietMessages()
+    return DictGet(qm, a:varName, a:defaultValue)
+endfunction
+
+function! SyntasticBufferQuietSet(varName, strValue)
+    let qm = SyntasticBufferQuietMessages()
+    " Unlet to avoid errors if we are changing the variable's type.
+    call DictUnlet(qm, a:varName)
+    let qm[a:varName] = a:strValue
+    let b:syntastic_quiet_messages = qm
+endfunction
+
+function! SyntasticBufferQuietInherit(varName)
+    let qm = SyntasticBufferQuietMessages()
+    if has_key(g:syntastic_quiet_messages, a:varName)
+        let qm[a:varName] = g:syntastic_quiet_messages[a:varName]
+    else
+        call DictUnlet(qm, a:varName)
+    endif
+    let b:syntastic_quiet_messages = qm
+endfunction
+
+function! SyntasticBufferQuietIsInherited(varName)
+    let gqm = g:syntastic_quiet_messages
+    let bqm = SyntasticBufferQuietMessages()
+    let ghk = has_key(gqm, a:varName)
+    let bhk = has_key(bqm, a:varName)
+    if ghk != bhk
+        " One has the key, the other doesn't ==> not inherited.
+        return 0
+    elseif !ghk
+        " Neither one has the key ==> inherited.
+        return 1
+    else
+        " Both have the key ==> inherited if the values are the same.
+        return type(gqm[a:varName]) == type(bqm[a:varName]) &&
+                \ gqm[a:varName] == bqm[a:varName]
+    endif
+endfunction
+
+
+function! SyntasticBufferIgnoreLevel(...)
+    if a:0 == 0
+        let level = SyntasticBufferQuietGet("level", "")
+        if type(level) == type([])
+            if level == []
+                let levelString = ""
+            elseif level == ["warning"]
+                let levelString = "warning"
+            else
+                " This ignores cases where level is a list containing both
+                " "warning" and "error", but in those cases it's equivalent to
+                " just disabling checking entirely, which would be much more
+                " efficient.  We presume nobody is doing that.
+                let levelString = "error"
+            endif
+            unlet level
+            let level = levelString
+        endif
+        if level == ""
+            let level = "nothing"
+        endif
+        if SyntasticBufferQuietIsInherited("level")
+            let level = level . " [inherited]"
+        endif
+        echo "Buffer ignore level=" . level
+    else
+        let level = a:1
+        if ListContains(split("warnings errors nothing inherited"), level)
+            if level == "inherited"
+                call SyntasticBufferQuietInherit("level")
+            else
+                if level == "nothing"
+                    let level = ""
+                endif
+                call SyntasticBufferQuietSet("level", level)
+            endif
+            SyntasticReset
+        else
+            echoerr "Invalid level " . level
+        endif
+    endif
+endfunction
+
+function! SyntasticBufferIgnoreLevelComplete(argLead, cmdLine, cursorPos)
+    return "warnings\nerrors\nnothing\ninherited"
+endfunction
+
+command! -n=? -bar -complete=custom,SyntasticBufferIgnoreLevelComplete
+        \ SyntasticBufferIgnoreLevel
+        \ call SyntasticBufferIgnoreLevel(<f-args>)
+
+
+function! SyntasticBufferIgnoreRegex(...)
+    if a:0 == 0
+        let regex = SyntasticBufferQuietGet("regex", [])
+        if type(regex) == type([])
+            if regex == []
+                let regexString = "<nothing>"
+            else
+                let regexString = regex[0]
+            endif
+            unlet regex
+            let regex = regexString
+        endif
+        if SyntasticBufferQuietIsInherited("regex")
+            let regex = regex . " [inherited]"
+        endif
+        echo "Ignore regex (use . for <nothing>, .. to inherit): " . regex
+    else
+        let regex = a:1
+        if regex == ".."
+            call SyntasticBufferQuietInherit("regex")
+        elseif regex == "."
+            call SyntasticBufferQuietSet("regex", [])
+        else
+            call SyntasticBufferQuietSet("regex", regex)
+        endif
+        SyntasticReset
+    endif
+endfunction
+
+function! SyntasticBufferIgnoreRegexComplete(argLead, cmdLine, cursorPos)
+    let regex = SyntasticBufferQuietGet("regex", "..")
+    if type(regex) == type("") && regex == ""
+        let regex = "."
+    endif
+    return regex
+endfunction
+
+command! -n=? -complete=custom,SyntasticBufferIgnoreRegexComplete
+        \ SyntasticBufferIgnoreRegex
+        \ call SyntasticBufferIgnoreRegex(<f-args>)
+
+
+" category is one of: "active", "passive", "default"
+" ... is a list of filetypes; "*" means "all" (for use with "default" category).
+function! SyntasticFiletypeCommand(category, ...)
+    let mm = GetVar("g:syntastic_mode_map", {})
+    let cats = {}
+    let cats["active"] = uniq(sort(DictGet(mm, "active_filetypes", [])))
+    let cats["passive"] = uniq(sort(DictGet(mm, "passive_filetypes", [])))
+    let cats["default"] = []
+    if len(a:000) == 0
+        echo a:category . ": " . join(cats[a:category], " ")
+        return
+    endif
+    for ftype in a:000
+        call add(cats[a:category], ftype)
+        for c in keys(cats)
+            " TODO: This is not quite right, but it's close.  This is the
+            " right semantic for changing "default", because it will clear
+            " everybody else.  It's also correct when the Syntastic mode
+            " matches a:category, but it's not right when the command goes
+            " the other way (e.g., when mode is passive and "active" is set
+            " to "*", which ought to put all known filetypes into the "active"
+            " list).  Revisit this if it proves that this case is valuable.
+            " The main use case here is to set "default" to "*", clearing
+            " out the lists.
+            if ftype == "*"
+                let cats[c] = []
+            elseif c != a:category
+                let cats[c] = filter(cats[c], 'v:val != ftype')
+            endif
+        endfor
+    endfor
+    let mm["active_filetypes"] = uniq(sort(cats["active"]))
+    let mm["passive_filetypes"] = uniq(sort(cats["passive"]))
+    let g:syntastic_mode_map = mm
+endfunction
+
+command! -n=* -bar SyntasticFiletypeActive
+        \ call SyntasticFiletypeCommand("active", <f-args>)
+
+command! -n=* -bar SyntasticFiletypePassive
+        \ call SyntasticFiletypeCommand("passive", <f-args>)
+
+command! -n=* -bar SyntasticFiletypeDefault
+        \ call SyntasticFiletypeCommand("default", <f-args>)
+
+" Python's "future" package imports some builtins that aren't always used, but
+" it's important to import the entire list to avoid the evils of
+" "from builtins import *" and to avoid the maintenance problems of adding
+" and removing modules from the import line.
+
+" List of imports that should be ignored by Flake8.
+let g:Flake8IgnoredImports = split(
+        \ 'ascii bytes chr dict filter hex input ' .
+        \ 'int map next oct open pow range round ' .
+        \ 'str super zip')
+
+" Convert list of unused imports into ignore regex.
+function! Flake8IgnoredImportsRegex(unused_imports)
+    let rex = '\<\(' . join(a:unused_imports, '\|')  . '\)\>.*\[F401\]'
+    return rex
+endfunction
+
+function! SyntasticBufferSetup(style)
+    let unknownCombination = 0
+    let setupFunc = "SyntasticBufferSetup_" . &filetype . "_" . a:style
+    if exists("*" . setupFunc)
+        echomsg "found setupFunc = " . setupFunc
+        call {setupFunc}()
+    elseif a:style == "inherited"
+        SyntasticBufferIgnoreLevel inherited
+        SyntasticBufferIgnoreRegex ..
+        unlet! b:syntastic_checkers
+    elseif &filetype == "python"
+        setlocal tw=79
+        let regex = Flake8IgnoredImportsRegex(g:Flake8IgnoredImports)
+        if a:style == "very_strict"
+            SyntasticBufferIgnoreLevel nothing
+            execute 'SyntasticBufferIgnoreRegex ' . regex
+            let b:syntastic_checkers = ["python", "flake8", "pylint"]
+        elseif a:style == "strict" || a:style == "strict_except_case"
+            SyntasticBufferIgnoreLevel nothing
+            let b:syntastic_checkers = ["python", "flake8"]
+            if a:style == "strict_except_case"
+                " Ignore flake8 warnings about lowerMixedCase names.
+                if regex != ''
+                    let regex .= '\|'
+                endif
+                let regex .= '\[\(N802\|N803\|N806\)\]'
+            endif
+            execute 'SyntasticBufferIgnoreRegex ' . regex
+        elseif a:style == "lax"
+            setlocal tw=80
+            SyntasticBufferIgnoreLevel nothing
+            SyntasticBufferIgnoreRegex .
+            let b:syntastic_checkers = ["python"]
+        else
+            let unknownCombination = 1
+        endif
+    else
+        let unknownCombination = 1
+    endif
+    if unknownCombination
+        echoerr "Unknown setup type '" . a:style .
+                \ "' for filetype '" . &filetype . "'"
+    else
+        SyntasticReset
+    endif
+endfunction
+
+function! SyntasticBufferSetupComplete(argLead, cmdLine, cursorPos)
+    return "very_strict\nstrict\nstrict_except_case\nlax\ninherited"
+endfunction
+
+command! -n=1 -bar -complete=custom,SyntasticBufferSetupComplete
+        \ SyntasticBufferSetup
+        \ call SyntasticBufferSetup(<f-args>)
+
 
 if &termencoding ==# 'utf-8' || &encoding ==# 'utf-8'
     let g:syntastic_error_symbol='✘'
@@ -2555,10 +4486,35 @@ if &termencoding ==# 'utf-8' || &encoding ==# 'utf-8'
 endif
 
 let g:syntastic_enable_balloons = 1
-let g:syntastic_quiet_warnings = 1
 let g:syntastic_enable_highlighting = 0
 
+" Options:
+"   " Disable warnings globally.
+"   let g:syntastic_quiet_messages = {'level': 'warnings'}
+let g:syntastic_quiet_messages = {}
+
+" 0: no automatic open or close of the location list.
+" 1: automatically open and close the location list.
+" 2: automatically close but not open the location list.
+" Note: Setting to 1 (auto-open/close) causes problems toggling the location
+" list via :lclose when the location list is focused.  It works when another
+" window is focused, though.  Using LocListWinToggle works because it uses
+" :noautocmd lclose.  Someday we may look into Syntastic more closely to see if
+" its logic can change to avoid this problem.
+let g:syntastic_auto_loc_list = 2
+let g:syntastic_always_populate_loc_list = 1
+
+" Remove pylint from Syntastic's default list of checkers (it's too picky).
+let g:syntastic_python_checkers = ['python', 'flake8']
+
+let g:syntastic_rst_rst2pseudoxml_quiet_messages = { 'level': [] }
+let g:syntastic_rst_rstsphinx_quiet_messages = { 'level': [] }
+let g:syntastic_rst_rstsphinx_args_before = '-j ' . NumCpus()
+
 function! ReplacePowerlineSyntastic()
+    if !g:EnablePowerline
+        return
+    endif
     function! Powerline#Functions#syntastic#GetErrors(line_symbol) " {{{
         if ! exists('g:syntastic_stl_format')
             " Syntastic hasn't been loaded yet
@@ -2586,11 +4542,13 @@ function! SyntasticFinalSetup()
     call ReplacePowerlineSyntastic()
 endfunction
 
+" Consider these for inclusion in active_filetypes:
+"   c cpp go haskell html javascript less sh vim zsh
 let g:syntastic_mode_map = {
-            \ 'mode': 'passive',
-            \ 'active_filetypes': ['python', 'ruby'],
-            \ 'passive_filetypes': []
-            \ }
+        \ 'mode': 'passive',
+        \ 'active_filetypes': ['python', 'ruby', 'rst'],
+        \ 'passive_filetypes': []
+        \ }
 
 augroup local_syntastic
     autocmd!
@@ -2621,8 +4579,8 @@ let g:tagbar_autoclose = 1
 let g:tagbar_autofocus = 1
 
 nnoremap <silent> <S-F8>     :TagbarToggle<CR>
-nnoremap <silent> <C-Q><C-T> :TagbarToggle<CR>
-nnoremap <silent> <C-Q>t     :TagbarToggle<CR>
+nnoremap <silent> <C-q><C-t> :TagbarToggle<CR>
+nnoremap <silent> <C-q>t     :TagbarToggle<CR>
 
 " Support for reStructuredText, if available.
 if executable("rst2ctags")
@@ -2634,24 +4592,69 @@ endif
 " Local tagbar settings.  Assign g:tagbar_type_rst to this value to enable
 " support for .rst files in tagbar.
 let g:local_tagbar_type_rst = {
-    \ 'ctagstype': 'rst',
-    \ 'ctagsbin' : g:rst2ctags,
-    \ 'ctagsargs' : '-f - --sort=yes',
-    \ 'kinds' : [
+        \ 'ctagstype': 'rst',
+        \ 'ctagsbin' : g:rst2ctags,
+        \ 'ctagsargs' : '-f - --sort=yes',
+        \ 'kinds' : [
         \ 's:sections',
         \ 'i:images'
-    \ ],
-    \ 'sro' : '|',
-    \ 'kind2scope' : {
+        \ ],
+        \ 'sro' : '|',
+        \ 'kind2scope' : {
         \ 's' : 'section',
-    \ },
-    \ 'sort': 0,
-\ }
+        \ },
+        \ 'sort': 0,
+        \ }
 
 " Enable support for .rst files in tagbar by default.  Disable if desired in
 " your |VIMRC_AFTER| file via:
 "   unlet g:tagbar_type_rst.
 let g:tagbar_type_rst = g:local_tagbar_type_rst
+
+" Support for markdown, if available.
+if executable("markdown2ctags")
+    let g:markdown2ctags = 'markdown2ctags'
+else
+    let g:markdown2ctags = $VIMFILES . '/tool/markdown2ctags/markdown2ctags.py'
+endif
+
+" Local tagbar settings.  Assign g:tagbar_type_markdown to this value to enable
+" support for markdown files in tagbar.
+let g:local_tagbar_type_markdown = {
+        \ 'ctagstype': 'markdown',
+        \ 'ctagsbin' : g:markdown2ctags,
+        \ 'ctagsargs' : '-f - --sort=yes',
+        \ 'kinds' : [
+        \ 's:sections',
+        \ 'i:images'
+        \ ],
+        \ 'sro' : '|',
+        \ 'kind2scope' : {
+        \ 's' : 'section',
+        \ },
+        \ 'sort': 0,
+        \ }
+
+" Enable support for markdown files in tagbar by default.  Disable if desired in
+" your |VIMRC_AFTER| file via:
+"   unlet g:tagbar_type_markdown.
+let g:tagbar_type_markdown = g:local_tagbar_type_markdown
+
+" -------------------------------------------------------------
+" tcomment
+" -------------------------------------------------------------
+
+" Don't comment blank lines.
+let g:tcomment#blank_lines = 0
+
+" Turn off the <C-_> and <Leader>_ mappings.
+let g:tcommentMapLeader1 = ''
+let g:tcommentMapLeader2 = ''
+
+" Setup better linewise comments for Java.
+let g:tcomment_types = {
+        \ 'java': '// %s',
+        \ }
 
 " -------------------------------------------------------------
 " textobj-diff
@@ -2690,9 +4693,15 @@ endfunction
 " directory "pre-bundle/clearsnippets" will be earlier in the
 " runtimepath.
 
-let g:UltiSnipsExpandTrigger="<tab>"
-let g:UltiSnipsJumpForwardTrigger="<tab>"
-let g:UltiSnipsJumpBackwardTrigger="<s-tab>"
+let g:UltiSnipsExpandTrigger="<Tab>"
+let g:UltiSnipsJumpForwardTrigger="<Tab>"
+let g:UltiSnipsJumpBackwardTrigger="<S-Tab>"
+
+" Do not use UltiSnips's algorithm for removing select-mode mappings.  It
+" should be restricted to just those mappings that start with printable
+" characters, but it removes too much (so, for example, the desirable
+" select-mode mapping for <M-z> gets unmapped).
+let g:UltiSnipsRemoveSelectModeMappings = 0
 
 " Use a:ultiSnipsSnippetDirectories as buffer-local value for UltiSnips's
 " global g:ultiSnipsSnippetDirectories.  Typically invoked from a .lvimrc
@@ -2733,7 +4742,7 @@ function! FindSnippetTemplate()
     " If the buffer has no name, we'll only look for template_<filetype>.  If
     " there's no filetype set for the buffer, we'll return an empty string since
     " it doesn't make sense to try and look up a template.
-    let l:snippets = UltiSnips_SnippetsInCurrentScope()
+    let l:snippets = UltiSnips#SnippetsInCurrentScope()
     let l:filename = expand("%:t")
 
     " There's no use proceeding if there's no filetype set.
@@ -2747,7 +4756,7 @@ function! FindSnippetTemplate()
 
         while l:idx >= 0
             let l:snippetName = "template_" . &filetype .
-                        \ "." . strpart(l:filename, l:idx)
+                    \ "." . strpart(l:filename, l:idx)
 
             if has_key(l:snippets, l:snippetName)
                 return l:snippetName
@@ -2784,7 +4793,7 @@ function! TriggerSnippetTemplate()
     if l:snippetName != ""
         startinsert
         call feedkeys(l:snippetName .
-                    \ eval('"\' . g:UltiSnipsExpandTrigger . '"'))
+                \ eval('"\' . g:UltiSnipsExpandTrigger . '"'))
         return 1
     endif
 
@@ -2792,58 +4801,140 @@ function! TriggerSnippetTemplate()
     return 0
 endfunction
 
-function! ExpandSnippetOrSkel()
-    let result = UltiSnips_ExpandSnippet()
-    if !g:ulti_expand_res && getline('.') == "skel"
-        let curPos=getpos('.')
-        call setline('.', '')
-
+" Attempt the "skel" pseudo-snippet if a:skelPermitted.
+" a:ultiResult comes from UltiSnips#ExpandSnippet() or
+" UltiSnips#ExpandSnippetOrJump(); it will be returned unless "skel" succeeds.
+function! TrySkel(skelPermitted, ultiResult)
+    let result = a:ultiResult
+    if a:skelPermitted && getline(".") == "skel"
+        let curPos = getpos(".")
+        call setline(".", "")
         if TriggerSnippetTemplate()
-            return ""
+            " Skeleton found.
+            let result = ""
+        else
+            " Didn't work; put back the line.
+            call setline(".", "skel")
+            call setpos(".", curPos)
         endif
-
-        call setline('.', 'skel')
-        call setpos('.', curPos)
     endif
+    return result
+endfunction
 
-    return l:result
+function! ExpandSnippetOrSkel()
+    let ultiResult = UltiSnips#ExpandSnippet()
+    return TrySkel(g:ulti_expand_res == 0, ultiResult)
 endfunction
 
 function! ExpandSnippetOrJumpOrSkel()
-    let result = UltiSnips_ExpandSnippetOrJump()
-    if !g:ulti_expand_or_jump_res && getline('.') == "skel"
-        let curPos=getpos('.')
-        call setline('.', '')
-
-        if TriggerSnippetTemplate()
-            return ""
-        endif
-
-        call setline('.', 'skel')
-        call setpos('.', curPos)
-    endif
-
-    return l:result
+    let ultiResult = UltiSnips#ExpandSnippetOrJump()
+    return TrySkel(g:ulti_expand_or_jump_res == 0, ultiResult)
 endfunction
 
 function! SetupUltiSnipsMapping()
     " Override the expand trigger mapping for UltiSnips to provide the
     " file skeleton functionality.
+
+    " Break undo sequence via <C-g>u before expanding the trigger.
+    let cmd = "inoremap <silent> " . g:UltiSnipsExpandTrigger . " <C-g>u"
     if g:UltiSnipsExpandTrigger == g:UltiSnipsJumpForwardTrigger
-        exec "inoremap <silent> " . g:UltiSnipsExpandTrigger .
-                    \ " <C-R>=ExpandSnippetOrJumpOrSkel()<cr>"
+        let cmd .= "<C-r>=ExpandSnippetOrJumpOrSkel()<CR>"
     else
-        exec "inoremap <silent> " . g:UltiSnipsExpandTrigger .
-                    \ " <C-R>=ExpandSnippetOrSkel()<cr>"
+        let cmd .= "<C-r>=ExpandSnippetOrSkel()<CR>"
     endif
+    exec cmd
+    inoremap <silent> <M-u><Tab> <C-r>=UltiSnips#JumpForwards()<CR>
+    snoremap <silent> <M-u><Tab> <Esc>:call UltiSnips#JumpForwards()<CR>
+    inoremap <silent> <M-u><M-l> <C-r>=UltiSnips#ListSnippets()<CR>
 endfunction
 
-augroup local_ultisnips
-    autocmd!
+if has("python")
+    function! EditSnippets()
+        if exists("b:UltiSnipsSnippetDirectories")
+            let l:snippetDirs = b:UltiSnipsSnippetDirectories
+        elseif exists("g:UltiSnipsSnippetDirectories")
+            let l:snippetDirs = g:UltiSnipsSnippetDirectories
+        else
+            let l:snippetDirs = ["UltiSnips"]
+        endif
 
-    " Store last active help buffer number when leaving the help window.
-    autocmd VimEnter * call SetupUltiSnipsMapping()
-augroup END
+python << endpython
+import os.path
+
+primary_filetype = vim.eval("&ft")
+filename = primary_filetype + '.snippets'
+pyfilename = filename + '.py'
+
+rtp = [os.path.realpath(os.path.expanduser(p))
+        for p in vim.eval("&rtp").split(",")]
+
+# Process them in reverse, because the UltiSnips uses the last one first.
+snippetDirs = vim.eval("l:snippetDirs")
+
+def searchForFile(filename):
+    editPath = None
+    for snippetDir in snippetDirs:
+        if editPath is not None:
+            break
+
+        for p in rtp:
+            if '/bundle/' in p or '/pre-bundle/' in p:
+                continue
+
+            fullPath = os.path.join(p, snippetDir, filename)
+            if os.path.exists(fullPath):
+                editPath = fullPath
+                break
+    return editPath
+
+path = searchForFile(pyfilename)
+if path is None:
+    # Hunt down a good location to put the snippets file.
+    for p in rtp:
+        if path is not None:
+            break
+
+        if '/bundle/' in p or '/pre-bundle/' in p:
+            continue
+
+        for snippetDir in snippetDirs:
+            fullPath = os.path.join(p, snippetDir)
+            if os.path.exists(fullPath):
+                path = fullPath
+                break
+
+        if path:
+            path = os.path.join(path, pyfilename)
+
+if path is None:
+    # Something is very wrong here.  We should at least have an
+    # UltiSnips at the root of the VIMFILES area.
+    vim.command("let filename = ''")
+else:
+    vim.command("let filename = '%s'" % path.replace("'", "''"))
+endpython
+
+        if l:filename == ""
+            echoerr "Could not find a suitable location to "
+                    \ . "create snippets file."
+        else
+            exec 'e ' . l:filename
+        endif
+    endfunction
+    command! EditSnippets :call EditSnippets()
+endif
+
+if g:EnableUltiSnips
+    augroup local_ultisnips
+        autocmd!
+
+        " Wait until all initialization is complete, then override mappings.
+        autocmd VimEnter * call SetupUltiSnipsMapping()
+    augroup END
+else
+    " UltiSnips will not load if this variable is defined:
+    let g:did_plugin_ultisnips = 1
+endif
 
 " -------------------------------------------------------------
 " vis
@@ -2856,10 +4947,10 @@ let g:vis_WantSlashSlash = 1
 " visswap
 " -------------------------------------------------------------
 
-" Change default CTRL-X to CTRL-T (for "trade") to avoid conflict
+" Change default CTRL-x to CTRL-t (for "trade") to avoid conflict
 " with swapit plugin.
 " @todo Consider other mappings...
-xmap <silent> <C-T> <Plug>VisualSwap
+xmap <silent> <C-t> <Plug>VisualSwap
 
 " -------------------------------------------------------------
 " vcscommand
@@ -2870,15 +4961,15 @@ xmap <silent> <C-T> <Plug>VisualSwap
 let VCSCommandMapPrefix = '<Leader>s'
 
 " When doing diff, force two-window layout with old on left.
-nmap <silent> <Leader>sv :OneWindow<CR><Plug>VCSVimDiff<C-W>H<C-W>w
+nmap <silent> <Leader>sv :OneWindow<CR><Plug>VCSVimDiff<C-w>H<C-w>w
 
 " -------------------------------------------------------------
 " winmanager
 " -------------------------------------------------------------
 
-" :nnoremap <C-W><C-T>   :WMToggle<CR>
-" :nnoremap <C-W><C-F>   :FirstExplorerWindow<CR>
-" :nnoremap <C-W><C-B>   :BottomExplorerWindow<CR>
+" :nnoremap <C-w><C-t>   :WMToggle<CR>
+" :nnoremap <C-w><C-f>   :FirstExplorerWindow<CR>
+" :nnoremap <C-w><C-b>   :BottomExplorerWindow<CR>
 
 " =============================================================
 " Language and filetype setup
@@ -2906,13 +4997,9 @@ set spelllang=en_us
 function! HighlightGroupExists(groupName)
     let haveGroup = 0
     if hlexists(a:groupName)
-        let regA = getreg("a")
-        let regTypeA = getregtype("a")
-        redir @a
+        redir => groupDef
         execute "silent highlight " . a:groupName
         redir END
-        let groupDef = @a
-        call setreg("a", regA, regTypeA)
         if groupDef !~# "xxx cleared$"
             let haveGroup = 1
         endif
@@ -2923,42 +5010,49 @@ endfunction
 function! HighlightDefineGroups()
     if !HighlightGroupExists("HG_Subtle")
         if &background == "dark"
-            hi HG_Subtle  ctermfg=brown  ctermbg=darkgray  guibg=red       guifg=white
+            highlight HG_Subtle  ctermfg=brown  ctermbg=darkgray
+                    \ guibg=red       guifg=white
         else
-            hi HG_Subtle  ctermfg=yellow ctermbg=lightgray guibg=#efeff7
+            highlight HG_Subtle  ctermfg=yellow ctermbg=lightgray
+                    \ guibg=#efeff7
         endif
     endif
     if !HighlightGroupExists("HG_Warning")
         if &background == "dark"
-            hi HG_Warning ctermfg=lightred  ctermbg=darkgray  guibg=#505000   guifg=lightgray
+            highlight HG_Warning ctermfg=lightred  ctermbg=darkgray
+                    \ guibg=#505000   guifg=lightgray
         else
-            hi HG_Warning ctermfg=yellow ctermbg=lightgray guibg=#ffffdd
+            highlight HG_Warning ctermfg=yellow ctermbg=lightgray guibg=#ffffdd
         endif
     endif
     if !HighlightGroupExists("HG_Error")
         if &background == "dark"
-            hi HG_Error   ctermfg=white  ctermbg=darkred  guibg=red       guifg=white
+            highlight HG_Error   ctermfg=white  ctermbg=darkred
+                    \ guibg=red       guifg=white
         else
-            hi HG_Error   ctermfg=red    ctermbg=lightgray guibg=#ffe0e0
+            highlight HG_Error   ctermfg=red    ctermbg=lightgray guibg=#ffe0e0
         endif
     endif
 endfunction
 
-:autocmd ColorScheme * call HighlightDefineGroups()
+autocmd ColorScheme * call HighlightDefineGroups()
 call HighlightDefineGroups()
 
-let g:HighlightNames = split("commas keywordspace longlines tabs trailingspace")
+" Default value for buffers without b:HighlightEnabled.
+let g:HighlightEnabled = 1
+
+let g:HighlightItems = split("commas keywordspace longlines tabs trailingspace")
 let g:HighlightRegex_longlines1 = '\%>61v.*\%<82v\(.*\%>80v.\)\@='
 let g:HighlightRegex_longlines2 = '\%>80v.\+'
 let g:HighlightRegex_tabs = '\t'
 let g:HighlightRegex_commas = ',\S'
 let g:HighlightRegex_keywordspace = '\(\<' . join(
-            \ split('for if while switch'), '\|\<') . '\)\@<=('
+        \ split('for if while switch'), '\|\<') . '\)\@<=('
 let g:HighlightRegex_trailingspace = '\s\+\%#\@<!$'
 
 " Invoke as: HighlightNamedRegex('longlines1', 'HG_Warning', 1)
 " The linkedGroup comes from the highlight groups (:help highlight-groups),
-" or from HighlightDefinGroups() above.
+" or from HighlightDefineGroups() above.
 " Highlight groups to consider:
 "   Error       very intrusive group with reverse-video red.
 "   ErrorMsg    less intrusive, red foreground (invisible for whitespace).
@@ -2967,7 +5061,7 @@ function! HighlightNamedRegex(regexName, linkedGroup, enable)
     exe "silent! syntax clear Highlight_" . a:regexName
     if a:enable
         exe "syntax match Highlight_" . a:regexName .
-                    \ " /" . g:HighlightRegex_{a:regexName} . "/"
+                \ " /" . g:HighlightRegex_{a:regexName} . "/"
         exe "highlight link Highlight_" . a:regexName . " " . a:linkedGroup
     endif
 endfunction
@@ -2994,39 +5088,73 @@ function! Highlight_trailingspace(enable)
 endfunction
 
 function! HighlightArgs(ArgLead, CmdLine, CursorPos)
-    let noNames = []
-    for name in g:HighlightNames
-        let noNames = add(noNames, 'no' . name)
+    let noItems = []
+    for Item in g:HighlightItems
+        let noItems = add(noItems, 'no' . Item)
     endfor
-    return join(g:HighlightNames + noNames + ['*', 'no*'], "\n")
+    return join(g:HighlightItems + noItems + ['*', 'no*'], "\n")
+endfunction
+
+function! HighlightBufferEnabled()
+    if exists("b:HighlightEnabled")
+        let bufferEnabled = b:HighlightEnabled
+    else
+        let bufferEnabled = g:HighlightEnabled
+    endif
+    return bufferEnabled
+endfunction
+
+function! HighlightItem(itemName, enable)
+    let fullItemName = 'Highlight_' . a:itemName
+    if !exists('*' . fullItemName)
+        echoerr "Invalid highlight option " . a:itemName
+        return
+    endif
+    let b:{fullItemName} = a:enable
+    call {fullItemName}(a:enable && HighlightBufferEnabled())
 endfunction
 
 function! Highlight(...)
     let i = 0
     while i < a:0
-        let name = a:000[i]
+        let itemName = a:000[i]
         let enable = 1
         if strpart(a:000[i], 0, 2) == 'no'
             let enable = 0
-            let name = strpart(name, 2)
+            let itemName = strpart(itemName, 2)
         endif
-        if name == '*'
-            for f in g:HighlightNames
-                call Highlight_{f}(enable)
+        if itemName == '*'
+            for itemName in g:HighlightItems
+                call HighlightItem(itemName, enable)
             endfor
         else
-            let funcName = 'Highlight_' . name
-            if exists('*' . funcName)
-                call {funcName}(enable)
-            else
-                echoerr "Invalid highlight option " . name
-            endif
+            call HighlightItem(itemName, enable)
         endif
         let i = i + 1
     endwhile
 endfunction
 command! -nargs=* -complete=custom,HighlightArgs
-            \ Highlight call Highlight(<f-args>)
+        \ Highlight call Highlight(<f-args>)
+
+function! HighlightItemEnabled(itemName)
+    let varName = "b:Highlight_" . a:itemName
+    return exists(varName) && {varName}
+endfunction
+
+" (Re)-apply highlight groups.
+" Note related local_HighlightApply autocmd group below.
+function! HighlightApply()
+    for itemName in g:HighlightItems
+        call HighlightItem(itemName, HighlightItemEnabled(itemName))
+    endfor
+endfunction
+
+function! HighlightEnable(enable)
+    let b:HighlightEnabled = a:enable
+    call HighlightApply()
+endfunction
+command!  HighlightOn  call HighlightEnable(1)
+command!  HighlightOff call HighlightEnable(0)
 
 " -------------------------------------------------------------
 " Spell-checking.
@@ -3112,29 +5240,78 @@ function! SetSpell()
     let key = LookupKey("b:SpellType", "g:SpellMap")
 
     if key == "<on>"
-        setl spell
+        setlocal spell
     elseif key == "<off>"
-        setl nospell
+        setlocal nospell
     endif
 endfunction
 
 " -------------------------------------------------------------
-" Setup for mail.
+" Settings common to all filetypes.
 " -------------------------------------------------------------
-function! SetupMail()
-    " Use the 'w' flag in formatoptions to setup format=flowed editing.
-    " The 'w' flag causes problems for wrapping when manual editing strips
-    " out a trailing space.  Better to avoid the flag...
-    " set formatoptions+=w
-    setlocal tw=64 sw=2 sts=2 et ai
+function! SetupCommon()
+    " Setup formatoptions:
+    "   c - auto-wrap comments to textwidth.
+    "   q - allow formatting of comments with 'gq'.
+    "   l - long lines are not broken in insert mode.
+    "   n - recognize numbered lists.
+    setlocal formatoptions+=cqln
+
+    " This flag was added in Vim 7.3.541:
+    "   j - remove comment leader when joining.
+    " Ignore failures setting this flag.
+    silent! setlocal formatoptions+=j
+
+    " Define pattern for list items.  This helps with reformatting paragraphs
+    " (e.g., via gqap) such that bulleted and numbered lines are handled
+    " correctly.
+    let &l:formatlistpat = '^\s*\d\+\.\s\+\|^\s*[-*+]\s\+'
+
+    " Also treat lines consisting of optional leading whitespace and
+    " a single repeated punctuation character as list items so that
+    " header text will not be joined with its underline. E.g., the below
+    " text will be unchanged by reformatting::
+    "
+    "   Some header text
+    "   ================
+    "
+    " Unfortunately, overlines are not treated properly.  This text:
+    "
+    "   =================
+    "   Over/under header
+    "   =================
+    "
+    " will be reformatted badly to this::
+    "
+    "   ================= Over/under header
+    "   =================
+    "
+    " But since underlined headers are the most common, this is better
+    " than nothing, and it's much easier to use Vim's built-in formatting
+    " logic than to write something custom.
+
+    let &l:formatlistpat .= '\|^\s*\([-=^"#*' . "'" . ']\)\ze\1\+$'
 endfunction
-command! -bar SetupMail call SetupMail()
-let g:SpellMap["mail"] = "<on>"
+command! -bar SetupCommon call SetupCommon()
 
 " -------------------------------------------------------------
-" Setup for plain text.
+" Setup for plain text (and derivatives).
 " -------------------------------------------------------------
 function! SetupText()
+    SetupCommon
+    " Auto-wrap text using textwidth:
+    setlocal formatoptions+=t
+
+    " Do not automatically insert comment leaders:
+    "   r - automatically insert comment leader when pressing <Enter>.
+    "   o - automatically insert comment leader after 'o' or 'O'.
+    " Note: This is to avoid the unwanted side-effect that pressing <Enter>
+    " on a bulleted list item indents the next line, e.g.:
+    "
+    "   - Pressing <Enter> on this bullet yields the below
+    "     indented second line.
+    setlocal formatoptions-=ro
+
     setlocal tw=80 ts=8 sts=2 sw=2 et ai
     let b:SpellType = "<text>"
 endfunction
@@ -3145,6 +5322,15 @@ let g:SpellMap["<text>"] = "<on>"
 " Setup for general source code.
 " -------------------------------------------------------------
 function! SetupSource()
+    SetupCommon
+    " Disable auto-wrap for text, allowing long code lines.
+    set formatoptions-=t
+
+    " Automatically insert comment leaders:
+    "   r - automatically insert comment leader when pressing <Enter>.
+    "   o - automatically insert comment leader after 'o' or 'O'.
+    setlocal formatoptions+=ro
+
     setlocal tw=80 ts=8 sts=4 sw=4 et ai
     Highlight longlines tabs trailingspace
     let b:SpellType = "<source>"
@@ -3156,6 +5342,7 @@ let g:SpellMap["<source>"] = "<on>"
 " Setup for markup languages like HTML, XML, ....
 " -------------------------------------------------------------
 function! SetupMarkup()
+    SetupText
     setlocal tw=80 ts=8 sts=2 sw=2 et ai
     runtime scripts/closetag.vim
     runtime scripts/xml.vim
@@ -3168,14 +5355,106 @@ command! -bar SetupMarkup call SetupMarkup()
 let g:SpellMap["<markup>"] = "<on>"
 
 " -------------------------------------------------------------
+" Setup for mail.
+" -------------------------------------------------------------
+function! SetupMail()
+    SetupText
+    " Use the 'w' flag in formatoptions to setup format=flowed editing.
+    " The 'w' flag causes problems for wrapping when manual editing strips
+    " out a trailing space.  Better to avoid the flag...
+    " set formatoptions+=w
+    setlocal tw=64 sw=2 sts=2 et ai
+
+    " Highlight diffs.  Most of this was taken from notmuch's vim integration,
+    " but with spelling turned off in the highlighted lines.
+
+    " diffSeparator separates headers such as "Signed-off-by" from the
+    " diff itself, as in this example::
+    "
+    "   Signed-off-by: John Szakmeister <john@example.com>
+    "   ---
+    "   Some comments about the diff that follows below.
+    "
+    " It's not part of diffRegion below.  Since it's unlikely that emails
+    " will contain the line "---" without preceding such a diff, and it's
+    " little enough harm in the event of a spurious match, we'll highlight
+    " lines of "---" anywhere throughout an email.
+    syntax match diffSeparator "^---$"
+
+    " These "contained" matches should all include the final newline in their
+    " regex, so that no characters are left unmatched.  That way, any unmatched
+    " characters will cause the "end=" match in diffRegion to bail out, showing
+    " the user where the well-formed diff hunk ends.
+    syntax match diffFile "^diff .*\n" contains=@NoSpell contained
+    syntax match diffIndex "^Index: .*\n" contains=@NoSpell contained
+    syntax match diffIndex "^index .*\n" contains=@NoSpell contained
+    syntax match diffNormal "^ .*\n" contains=@NoSpell contained
+    syntax match diffNormal "^=\+\n" contains=@NoSpell contained
+    syntax match diffRemoved "^-.*\n" contains=@NoSpell contained
+    syntax match diffAdded "^+.*\n" contains=@NoSpell contained
+
+    syntax match diffNewFile "^+++ .*\n" contains=@NoSpell contained
+    syntax match diffOldFile "^--- .*\n" contains=@NoSpell contained
+
+    syntax match diffSubname " @@..*\n"ms=s+3 contains=@NoSpell contained
+    syntax match diffLine "^@.*\n" contains=diffSubname,@NoSpell
+
+    " Declare a region of "diff" hunks.  The "matchgroup=" directive applies
+    " only for select "end=" conditions, allowing the other contained matches to
+    " handle individual highlighting (e.g., "diffIndex" will be used to
+    " highlight the "Index: " lines).  The use of "." as an "end=" regex means
+    " that diffRegion will terminate on the first character not claimed by one
+    " of the contained matches.  Another "end=" regex causes termination on a
+    " completely empty line, since diff hunks should have at least a leading
+    " space for normal diff lines.
+
+    syntax region diffRegion
+            \ contains=@NoSpell,
+            \diffFile,diffIndex,diffNormal,diffRemoved,diffAdded,
+            \diffNewFile,diffOldFile,diffLine
+            \ start="\v^(
+            \(diff .*\nindex .*\n|Index: .*\n(\=+\n)?)?
+            \(^--- .*\n\+\+\+ )
+            \)"
+            \ end="^$"
+            \ end="."
+            \ matchgroup=diffEndmarker
+            \ end="^-- \n"
+
+    highlight default link diffHeader diffFile
+    highlight default link diffIndex diffFile
+    highlight default link diffOldFile diffFile
+    highlight default link diffNewFile diffFile
+    highlight default link diffRemoved Special
+    highlight default link diffAdded Identifier
+    highlight default link diffLine Statement
+    highlight default link diffSubname PreProc
+    highlight default link diffSeparator diffComment
+    highlight default link diffEndMarker diffComment
+
+    syntax match gitDiffStatLine /^ .\{-}\zs[+-]\+$/
+            \ contains=gitDiffStatAdd,gitDiffStatDelete
+    syntax match gitDiffStatAdd /+/ contained
+    syntax match gitDiffStatDelete /-/ contained
+
+    highlight default link gitDiffStatAdd diffAdded
+    highlight default link gitDiffStatDelete diffRemoved
+
+    " Re-synchronize syntax highlighting from start of file.
+    syntax sync fromstart
+endfunction
+command! -bar SetupMail call SetupMail()
+let g:SpellMap["mail"] = "<on>"
+
+" -------------------------------------------------------------
 " Setup for Markdown.
 " -------------------------------------------------------------
 
 function! DisableMarkdownSyntaxCodeList()
     if exists ("g:markdown_fenced_languages") &&
-                \ len(g:markdown_fenced_languages) > 0
+            \ len(g:markdown_fenced_languages) > 0
         echoerr "Disabling g:markdown_fenced_languages; " .
-                    \ "use g:markdownEmbeddedLangs"
+                \ "use g:markdownEmbeddedLangs"
     endif
     let g:markdown_fenced_languages = []
 endfunction
@@ -3211,28 +5490,16 @@ function! SetupMarkdownSyntax()
             let includedLangs[synLang] = 1
         endif
 
-        exe 'syn region ' . synGroup .
-                    \ ' matchgroup=markdownCodeDelimiter start="^\s*```\s*' .
-                    \ lang . '\>.*$" end="^\s*```\ze\s*$" keepend ' .
-                    \ 'contains=@' . synGroup
+        exe 'syntax region ' . synGroup .
+                \ ' matchgroup=markdownCodeDelimiter start="^\s*```\s*' .
+                \ lang . '\>.*$" end="^\s*```\ze\s*$" keepend ' .
+                \ 'contains=@' . synGroup
     endfor
 endfunction
 command! -bar SetupMarkdownSyntax call SetupMarkdownSyntax()
 
 function! SetupMarkdown()
     SetupMarkup
-
-    " Setup formatoptions:
-    "   t - auto-wrap text using textwidth.
-    "   c - auto-wrap comments to textwidth.
-    "   q - allow formatting of comments with 'gq'.
-    "   l - long lines are not broken in insert mode.
-    setlocal formatoptions=tcql
-
-    " Turn on list support.  List pattern taken from vim-markdown's
-    " ftplugin/markdown.vim.
-    setlocal formatoptions+=n
-    setlocal formatlistpat=^\\s*\\d\\+\\.\\s\\+\\\|^[-*+]\\s\\+
 
     " Setup comments so that we get proper list support.  Also taken from
     " vim-markdown's ftplugin/markdown.vim.
@@ -3241,8 +5508,8 @@ function! SetupMarkdown()
     " Setup some extra highlighting for code blocks.  This matches the
     " highlighting from Ben William's syntax/mkd.vim and is a decent fallback
     " when we don't support the embedded language or the block is inline.
-    hi def link markdownCode                  String
-    hi def link markdownCodeBlock             String
+    highlight default link markdownCode                  String
+    highlight default link markdownCodeBlock             String
 endfunction
 command! -bar SetupMarkdown call SetupMarkdown()
 
@@ -3250,6 +5517,7 @@ command! -bar SetupMarkdown call SetupMarkdown()
 " Setup LessCSS.
 " -------------------------------------------------------------
 function! SetupLess()
+    SetupText
     setlocal tw=80 ts=8 sts=2 sw=2 et ai
 endfunction
 command! -bar SetupLess call SetupLess()
@@ -3283,7 +5551,7 @@ function! SetupRstSyntax()
     " .. code-block:: lang
     "     lang-specific source code here.
     " ..
-    function! l:EmbedCodeBlock(lang, synGroup)
+    function! s:EmbedCodeBlock(lang, synGroup)
         if a:lang == ""
             let region = "rstCodeBlock"
             let regex = ".*"
@@ -3291,7 +5559,7 @@ function! SetupRstSyntax()
             let region = "rstDirective" . a:lang
             let regex = a:lang
         endif
-        silent! syn clear region
+        silent! syntax clear region
         let cmd  = 'syntax region ' . region
         let cmd .= ' matchgroup=rstDirective fold'
         let cmd .= ' start="^\z(\s*\)\.\.\s\+'
@@ -3308,9 +5576,10 @@ function! SetupRstSyntax()
         execute 'syntax cluster rstDirectives add=' . region
     endfunction
 
+    let old_iskeyword = &iskeyword
     call DisableRstSyntaxCodeList()
     " Handle unspecified languages first.
-    call l:EmbedCodeBlock("", "")
+    call s:EmbedCodeBlock("", "")
     let includedLangs = {}
     for lang in g:rstEmbeddedLangs
         let synLang = lang
@@ -3326,8 +5595,9 @@ function! SetupRstSyntax()
             call SyntaxInclude(synGroup, synLang)
             let includedLangs[synLang] = 1
         endif
-        call l:EmbedCodeBlock(lang, synGroup)
+        call s:EmbedCodeBlock(lang, synGroup)
     endfor
+    let &iskeyword = old_iskeyword
 
     " Re-synchronize syntax highlighting from start of file.
     syntax sync fromstart
@@ -3335,15 +5605,38 @@ endfunction
 command! -bar SetupRstSyntax call SetupRstSyntax()
 
 function! SetupRst()
+    SetupText
     setlocal tw=80 ts=8 sts=2 sw=2 et ai
+
+    if has("python") && findfile('conf.py', '.;') != ''
+        let b:syntastic_checkers = ['rstsphinx']
+    endif
 endfunction
 command! -bar SetupRst call SetupRst()
 let g:SpellMap["rst"] = "<on>"
+
+function! SetupRstIndent()
+    " The indent function shipped with Vim tries to guess the desired
+    " indentation, but it guesses incorrectly often enough to make it
+    " irritating.  This is mainly because after a line like this:
+    "
+    "   - Some bullet text
+    "
+    " It's not possible to guess accurately enough whether the user
+    " plans to continue the bullet or start something new.  Manually
+    " changing the indentation when desired seems to create a less
+    " jarring experience.  Therefore, use the "Status Quo" indentation
+    " function to keep the prevailing indentation level unless the user
+    " changes it explicitly.
+    setlocal indentexpr=StatusQuoIndent()
+endfunction
+command! -bar SetupRstIndent call SetupRstIndent()
 
 " -------------------------------------------------------------
 " Setup for Wikipedia.
 " -------------------------------------------------------------
 function! SetupWikipedia()
+    SetupText
     setlocal tw=0 ts=8 sts=2 sw=2 et ai
     " Setup angle brackets as matched pairs for '%'.
     setlocal matchpairs+=<:>
@@ -3433,18 +5726,9 @@ function! SetupC()
     " How many lines away to search for unclosed comments.
     setlocal cinoptions+=*100
 
-    " Setup formatoptions:
-    "   c - auto-wrap comments to textwidth.
-    "   r - automatically insert comment leader when pressing <Enter>.
-    "   o - automatically insert comment leader after 'o' or 'O'.
-    "   q - allow formatting of comments with 'gq'.
-    "   l - long lines are not broken in insert mode.
-    "   n - recognize numbered lists.
-    setlocal formatoptions=croqln
-
-    " Map CTRL-O_CR to append ';' to the end of line, then do CR.
-    inoremap <buffer> <C-O><CR> <C-\><C-N>A;<CR>
-    vnoremap <buffer> <C-O><CR> <C-\><C-N>A;<CR>
+    " Map CTRL-o_CR to append ';' to the end of line, then do CR.
+    inoremap <buffer> <C-o><CR> <C-\><C-n>A;<CR>
+    vnoremap <buffer> <C-o><CR> <C-\><C-n>A;<CR>
 endfunction
 command! -bar SetupC call SetupC()
 
@@ -3476,6 +5760,9 @@ command! -bar SetupClojure call SetupClojure()
 function! SetupCmake()
     SetupSource
     setlocal commentstring=#\ %s
+
+    " Re-synchronize syntax highlighting from start of file.
+    syntax sync fromstart
 endfunction
 command! -bar SetupCmake call SetupCmake()
 
@@ -3505,6 +5792,12 @@ function! SetupGit()
 endfunction
 command! -bar SetupGit call SetupGit()
 
+function! SetupGitConfig()
+    SetupText
+    setlocal noexpandtab sts=8 sw=8 commentstring=#\ %s
+endfunction
+command! -bar SetupGitConfig call SetupGitConfig()
+
 " -------------------------------------------------------------
 " Setup for Haskell.
 " -------------------------------------------------------------
@@ -3525,11 +5818,20 @@ function! SetupJavaScript()
         setlocal sts=2 sw=2
     endif
 
-    " Map CTRL-O_CR to append ';' to the end of line, then do CR.
-    inoremap <buffer> <C-O><CR> <C-\><C-N>A;<CR>
-    vnoremap <buffer> <C-O><CR> <C-\><C-N>A;<CR>
+    " Map CTRL-o_CR to append ';' to the end of line, then do CR.
+    inoremap <buffer> <C-o><CR> <C-\><C-n>A;<CR>
+    vnoremap <buffer> <C-o><CR> <C-\><C-n>A;<CR>
 endfunction
 command! -bar SetupJavaScript call SetupJavaScript()
+
+" -------------------------------------------------------------
+" Setup for JSON
+" -------------------------------------------------------------
+function! SetupJson()
+    SetupSource
+    Highlight nolonglines
+endfunction
+command! -bar SetupJson call SetupJson()
 
 " -------------------------------------------------------------
 " Setup for LLVM source code.
@@ -3560,10 +5862,31 @@ endfunction
 command! -bar SetupLlvm call SetupLlvm()
 
 " -------------------------------------------------------------
+" Setup for Lua.
+" -------------------------------------------------------------
+function! SetupLua()
+    SetupSource
+    setlocal commentstring=--\ %s
+endfunction
+command! -bar SetupLua call SetupLua()
+
+" -------------------------------------------------------------
+" Setup for Moonscript.
+" -------------------------------------------------------------
+function! SetupMoonscript()
+    SetupSource
+    setlocal commentstring=--\ %s
+endfunction
+command! -bar SetupMoonscript call SetupMoonscript()
+
+" -------------------------------------------------------------
 " Setup for Python.
 " -------------------------------------------------------------
 function! SetupPython()
     SetupSource
+
+    " Lines are at most 79 characters according to PEP8.
+    setlocal tw=79
 
     " Python always thinks tabs are 8 characters wide.
     setlocal ts=8
@@ -3571,9 +5894,14 @@ function! SetupPython()
     " Follow PEP-recommended alignment of parentheses
     setlocal cinoptions+=(0
 
-    " Map CTRL-O_CR to append ':' to the end of line, then do CR.
-    inoremap <buffer> <C-O><CR> <C-\><C-N>A:<CR>
-    vnoremap <buffer> <C-O><CR> <C-\><C-N>A:<CR>
+    " Map CTRL-o_CR to append ':' to the end of line, then do CR.
+    inoremap <buffer> <C-o><CR> <C-\><C-n>A:<CR>
+    vnoremap <buffer> <C-o><CR> <C-\><C-n>A:<CR>
+
+    " Re-synchronize syntax highlighting from start of file.
+    syntax sync fromstart
+
+    SyntasticBufferSetup strict
 endfunction
 command! -bar SetupPython call SetupPython()
 let g:IndentGuidesMap["python"] = "<on>"
@@ -3584,12 +5912,208 @@ if !exists("g:python_version_2")
 endif
 
 " -------------------------------------------------------------
+" Setup for QuickFix window
+" -------------------------------------------------------------
+
+" Parse line for 'path/to/filename|', return 'path/to/filename' or ''.
+function! QuickFixFilename(line)
+    return matchstr(a:line, '\v^[^|]+\ze\|')
+endfunction
+
+" Use getline() to search current buffer at lineNum and backward until
+" a valid QuickFixFilename() is located; return it or '' if not found.
+function! QuickFixFilenameAt(lineNum)
+    let i = a:lineNum
+    while i >= 1
+        let filename = QuickFixFilename(getline(i))
+        if filename != ''
+            return filename
+        endif
+        let i -= 1
+    endwhile
+    return ''
+endfunction
+
+" Find the "leading" line number starting at lineNum and working backward.
+" Uses getline() to determine prevailing filename at lineNum, then determines
+" first line number with that same filename.  If no such filename, return 0.
+function! QuickFixLeadingLineNum(lineNum)
+    let leadingFilename = QuickFixFilenameAt(a:lineNum)
+    if leadingFilename == ''
+        return 0
+    endif
+    let leadingLineNum = a:lineNum
+    let i = a:lineNum - 1
+    while i >= 1
+        let filename = QuickFixFilename(getline(i))
+        if filename == leadingFilename
+            let leadingLineNum = i
+        elseif filename != ''
+            break
+        endif
+        let i -= 1
+    endwhile
+    return leadingLineNum
+endfunction
+
+function! QuickFixPrevFileLineNum()
+    let lineNum = line('.')
+    let leadingLineNum = QuickFixLeadingLineNum(lineNum)
+    if leadingLineNum == lineNum
+        let leadingLineNum = QuickFixLeadingLineNum(leadingLineNum - 1)
+    endif
+    if leadingLineNum > 0
+        let lineNum = leadingLineNum
+    endif
+    return lineNum
+endfunction
+
+function! QuickFixNextFileLineNum()
+    let lineNum = line('.')
+    let leadingFilename = QuickFixFilenameAt(lineNum)
+    " Set destLineNum to line number of next non-empty filename (if any).
+    let destLineNum = lineNum
+    while lineNum < line('$')
+        let lineNum += 1
+        let filename = QuickFixFilename(getline(lineNum))
+        if (filename != '') && (filename != leadingFilename)
+            let destLineNum = lineNum
+            break
+        endif
+    endwhile
+    return destLineNum
+endfunction
+
+" Save height of QuickFix window.
+function! SaveQuickFixHeight()
+    if &buftype == 'quickfix'
+        let b:QuickFixHeight = winheight(0)
+    endif
+endfunction
+
+" Restore height of QuickFix window.
+function! RestoreQuickFixHeight()
+    if &buftype == 'quickfix' && exists('b:QuickFixHeight')
+        execute 'resize ' . b:QuickFixHeight
+    endif
+endfunction
+
+" Add mappings to QuickFix and Location List windows.
+function! AddQuickFixMappings()
+    if &buftype == 'quickfix'
+        let pre = 'nmap <buffer> <silent> '
+        let saveH = ':call SaveQuickFixHeight()<CR>'
+        let restoreH = ':call RestoreQuickFixHeight()<CR>'
+        if IsQuickFixWin()
+            let close = ':cclose<CR>'
+        else
+            let close = ':lclose<CR>'
+        endif
+        let openNew = '<C-w><CR>'
+        let prevWin = '<C-w>p'
+
+        " Allow escaping out of mappings without performing o/O editing actions.
+        nnoremap <buffer> <silent> o <Nop>
+        nnoremap <buffer> <silent> O <Nop>
+
+        execute pre . 'oo ' . prevWin
+        execute pre . 'OO ' . close
+
+        " Ensure <CR> does the out-of-the-box behavior.
+        nnoremap <buffer> <silent> <CR> <CR>
+
+        let openStay = '<CR>' . prevWin
+        execute pre . '<s-CR>  ' . openStay
+        execute pre . 'o<CR> '   . '<CR>'
+        execute pre . 'o<s-CR> ' . openStay
+        execute pre . 'O<CR> '   . openStay . close
+        execute pre . 'O<s-CR> ' . openStay . close
+
+        let openStay = openNew . '<C-w>K' . prevWin
+        execute pre . 'oh ' . saveH . openStay . restoreH . prevWin
+        execute pre . 'oH ' . saveH . openStay . restoreH
+        execute pre . 'Oh '         . openStay . close    . prevWin
+        execute pre . 'OH '         . openStay . close    . prevWin
+
+        let openStay = openNew . '<C-w>H' . prevWin . '<C-w>J'
+        execute pre . 'ov ' . saveH . openStay . restoreH . prevWin
+        execute pre . 'oV ' . saveH . openStay . restoreH
+        execute pre . 'Ov '         . openStay . close    . prevWin
+        execute pre . 'OV '         . openStay . close    . prevWin
+
+        let openStay = openNew . '<C-w>T' . 'gT<C-w>j'
+        execute pre . 'ot ' . saveH . openStay . restoreH . 'gt'
+        execute pre . 'oT ' . saveH . openStay . restoreH
+        execute pre . 'Ot '         . openStay . close    . 'gt'
+        execute pre . 'OT '         . openStay . close    . 'gt'
+
+        nnoremap <buffer> <F1> :help notes_quickfix<CR>
+
+        nnoremap <buffer> <silent> <expr> {
+                \ ':' . QuickFixPrevFileLineNum() . '<CR>'
+        nnoremap <buffer> <silent> <expr> }
+                \ ':' . QuickFixNextFileLineNum() . '<CR>'
+    endif
+endfunction
+
+function! SetupQuickFix()
+   FoldQuickFixFiles 1
+   call AddQuickFixMappings()
+   " Don't do whitespace checking on QuickFix windows.
+   " By default, QuickFix would be ignored because it's readonly, but we have
+   " a writable QuickFix due to the QuickFix Reflector plugin.
+   let b:airline_whitespace_disabled = 1
+endfunction
+command! -bar SetupQuickFix call SetupQuickFix()
+
+" -------------------------------------------------------------
 " Setup for Ruby.
 " -------------------------------------------------------------
 function! SetupRuby()
     SetupSource
 endfunction
 command! -bar SetupRuby call SetupRuby()
+
+" -------------------------------------------------------------
+" Setup for Rust.
+" -------------------------------------------------------------
+function! SetupRust()
+    SetupSource
+endfunction
+command! -bar SetupRust call SetupRust()
+
+" -------------------------------------------------------------
+" Setup for Scheme code.
+" -------------------------------------------------------------
+function! SetupScheme()
+    SetupSource
+    setlocal ts=8 sts=2 sw=2
+
+    RainbowParenthesesLoadRound
+    RainbowParenthesesActivate
+endfunction
+command! -bar SetupScheme call SetupScheme()
+
+" -------------------------------------------------------------
+" Setup for shell languages like sh and zsh.
+" -------------------------------------------------------------
+
+" Avoid adding "." to 'iskeyword'.  The 'sh' syntax file started adding
+" this a while ago, apparently because certain dialects of shell syntax
+" permit using a "." inside of an identifier; but changing 'iskeyword'
+" breaks expectations for word-related editing commands like ``dw``.
+" Given that using a "." in an identifier is a very rare use-case, whereas
+" editing words is a very common use-case, this is a mis-feature that needs
+" to be undone by the following assignment.
+let g:sh_noisk = 1
+
+function! SetupShell()
+    SetupSource
+
+    " Re-synchronize syntax highlighting from start of file.
+    syntax sync fromstart
+endfunction
+command! -bar SetupShell call SetupShell()
 
 " -------------------------------------------------------------
 " Setup for Subversion commit files.
@@ -3600,6 +6124,15 @@ function! SetupSvn()
 endfunction
 command! -bar SetupSvn call SetupSvn()
 
+" --------------------------------------
+" Setup for Vader (Vim testing language)
+" --------------------------------------
+function! SetupVader()
+    SetupSource
+    HighlightOff
+endfunction
+command! -bar SetupVader call SetupVader()
+
 " -------------------------------------------------------------
 " Setup for VHDL.
 " -------------------------------------------------------------
@@ -3608,22 +6141,13 @@ function! SetupVhdl()
 
     setlocal comments=b:--
 
-    " Setup formatoptions:
-    "   c - auto-wrap comments to textwidth.
-    "   r - automatically insert comment leader when pressing <Enter>.
-    "   o - automatically insert comment leader after 'o' or 'O'.
-    "   q - allow formatting of comments with 'gq'.
-    "   l - long lines are not broken in insert mode.
-    "   n - recognize numbered lists.
-    setlocal formatoptions=croqln
-
-    " Map CTRL-O_CR to append ';' to the end of line, then do CR.
-    inoremap <buffer> <C-O><CR> <C-\><C-N>A;<CR>
-    vnoremap <buffer> <C-O><CR> <C-\><C-N>A;<CR>
+    " Map CTRL-o_CR to append ';' to the end of line, then do CR.
+    inoremap <buffer> <C-o><CR> <C-\><C-n>A;<CR>
+    vnoremap <buffer> <C-o><CR> <C-\><C-n>A;<CR>
 
     " Convert a port into a port map.
     xnoremap <buffer> <leader>pm :s/^\(\s*\)\(\w\+\)\(\s*\)\(=>\<bar>:\).*
-                \/\1\2\3=> \2,/<CR>
+            \/\1\2\3=> \2,/<CR>
 endfunction
 command! -bar SetupVhdl call SetupVhdl()
 
@@ -3631,6 +6155,7 @@ command! -bar SetupVhdl call SetupVhdl()
 " Setup for Vim C-code Source (the source code for Vim itself).
 " -------------------------------------------------------------
 function! SetupVimC()
+    SetupCommon
     setlocal ts=8 sts=4 sw=4 tw=80
 
     " Don't expand tabs to spaces.
@@ -3644,23 +6169,20 @@ function! SetupVimC()
 
     " Use default indentation options.
     setlocal cinoptions&
-
-    " Setup formatoptions:
-    "   c - auto-wrap comments to textwidth.
-    "   r - automatically insert comment leader when pressing <Enter>.
-    "   o - automatically insert comment leader after 'o' or 'O'.
-    "   q - allow formatting of comments with 'gq'.
-    "   l - long lines are not broken in insert mode.
-    "   n - recognize numbered lists.
-    "   t - autowrap using textwidth,
-    setlocal formatoptions=croqlnt
 endfunction
 command! -bar SetupVimC call SetupVimC()
+
+" Set indentation for backslash-continuations (the default value of 3 *
+" &shiftwidth is excessive).  Do not define here in terms of &shiftwidth,
+" as that value won't be set yet; but make this a one-time setting here so that
+" vimrc-after can override it.
+let g:vim_indent_cont = 2 * 4
 
 " -------------------------------------------------------------
 " Setup for Linux Kernel Sources.
 " -------------------------------------------------------------
 function! SetupKernelSource()
+    SetupCommon
     setlocal ts=8 sts=8 sw=8 tw=80
 
     " Don't expand tabs to spaces.
@@ -3680,16 +6202,6 @@ function! SetupKernelSource()
 
     " Line up function args.
     setlocal cinoptions+=(0
-
-    " Setup formatoptions:
-    "   c - auto-wrap comments to textwidth.
-    "   r - automatically insert comment leader when pressing <Enter>.
-    "   o - automatically insert comment leader after 'o' or 'O'.
-    "   q - allow formatting of comments with 'gq'.
-    "   l - long lines are not broken in insert mode.
-    "   n - recognize numbered lists.
-    "   t - autowrap using textwidth,
-    setlocal formatoptions=croqlnt
 endfunction
 command! -bar SetupKernelSource call SetupKernelSource()
 
@@ -3697,6 +6209,7 @@ command! -bar SetupKernelSource call SetupKernelSource()
 " Setup for Makefiles.
 " -------------------------------------------------------------
 function! SetupMake()
+    SetupCommon
     " Vim's defaults are mostly good.
     setlocal ts=8 tw=80
 
@@ -3715,6 +6228,7 @@ command! -bar SetupMakeIndent call SetupMakeIndent()
 " Setup for help files.
 " -------------------------------------------------------------
 function! SetupHelp()
+    SetupText
     " This helps make it easier to jump to tags while editing help files,
     " since a number of tags contain a hyphen.
     " The "@" adds in all "alphabetic" characters, including
@@ -3778,9 +6292,9 @@ function! HelpToggle()
 endfunction
 command! -bar HelpToggle call HelpToggle()
 
-nnoremap <F1>       :<C-U>HelpToggle<CR>
-nnoremap <C-Q>h     :<C-U>HelpToggle<CR>
-nnoremap <C-Q><C-H> :<C-U>HelpToggle<CR>
+nnoremap <F1>       :<C-u>HelpToggle<CR>
+nnoremap <C-q>h     :<C-u>HelpToggle<CR>
+nnoremap <C-q><C-h> :<C-u>HelpToggle<CR>
 
 " Get help on visual selection.
 function! VisualHelp()
@@ -3788,15 +6302,16 @@ function! VisualHelp()
 endfunction
 command! -bar VisualHelp call VisualHelp()
 
-xnoremap <F1>       :<C-U>call VisualHelp()<CR>
-xnoremap <C-Q>h     :<C-U>call VisualHelp()<CR>
-xnoremap <C-Q><C-H> :<C-U>call VisualHelp()<CR>
+xnoremap <F1>       :<C-u>call VisualHelp()<CR>
+xnoremap <C-q>h     :<C-u>call VisualHelp()<CR>
+xnoremap <C-q><C-h> :<C-u>call VisualHelp()<CR>
 
 
 " -------------------------------------------------------------
 " Setup for C projects following the GNU Coding Standards
 " -------------------------------------------------------------
 function! SetupGnuSource()
+    SetupSource
     " Don't expand tabs to spaces.
     setlocal noexpandtab
 
@@ -3858,20 +6373,11 @@ function! SetupGnuSource()
     setlocal cinoptions+=m1
 
     setlocal sw=2 sts=2 tw=79
-
-    " Setup formatoptions:
-    "   c - auto-wrap comments to textwidth.
-    "   r - automatically insert comment leader when pressing <Enter>.
-    "   o - automatically insert comment leader after 'o' or 'O'.
-    "   q - allow formatting of comments with 'gq'.
-    "   l - long lines are not broken in insert mode.
-    "   n - recognize numbered lists.
-    "   t - autowrap using textwidth,
-    setlocal formatoptions=croqlnt
 endfunction
 command! -bar SetupGnuSource call SetupGnuSource()
 
 function! SetupDiff()
+    SetupText
     call CreateTextobjDiffLocalMappings()
 endfunction
 command! -bar SetupDiff call SetupDiff()
@@ -3908,8 +6414,21 @@ command! -bar SetupTmux call SetupTmux()
 
 function! SetupYaml()
     SetupSource
+    setlocal sts=2 sw=2
+    let b:SpellType = "<yaml>"
 endfunction
 command! -bar SetupYaml call SetupYaml()
+let g:SpellMap["<yaml>"] = "<off>"
+
+function! SetupYamlIndent()
+    " Turn off re-indenting feature for the following keys:
+    setlocal indentkeys-=0{
+    setlocal indentkeys-=0}
+    setlocal indentkeys-=0)
+    setlocal indentkeys-=<:>
+    setlocal indentkeys-=0#
+endfunction
+command! -bar SetupYamlIndent call SetupYamlIndent()
 
 " Source support for :Man command.
 runtime ftplugin/man.vim
@@ -3975,19 +6494,53 @@ function! AutoCloseGitDiff()
     endif
 endfunction
 
-" Save current view settings.
+" Save current view settings on a per-window, per-buffer basis.
 function! AutoSaveWinView()
-    let b:winview = winsaveview()
+    if !exists("w:SavedBufView")
+        let w:SavedBufView = {}
+    endif
+    let w:SavedBufView[bufnr("%")] = winsaveview()
 endfunction
 
 " Restore current view settings.
 function! AutoRestoreWinView()
-    if exists('b:winview')
-        if (!&diff)
-            call winrestview(b:winview)
+    let buf = bufnr("%")
+    if exists("w:SavedBufView") && has_key(w:SavedBufView, buf)
+        let v = winsaveview()
+        let atStartOfFile = v.lnum == 1 && v.col == 0
+        if atStartOfFile && !&diff
+            call winrestview(w:SavedBufView[buf])
         endif
-        unlet b:winview
+        unlet w:SavedBufView[buf]
     endif
+endfunction
+
+function! ChangeRebaseAction(action)
+    let ptn = '^\(pick\|reword\|edit\|squash\|fixup\|exec\|p\|r\|e\|s\|f\|x\)\s'
+    let line = getline(".")
+    let result = matchstr(line, ptn)
+    if result != ""
+        execute "normal! ^cw" . a:action
+        execute "normal! ^"
+    endif
+endfunction
+
+function! SetupRebaseMappings()
+    nnoremap <buffer> <Leader><Leader>e
+            \ :call ChangeRebaseAction('edit') <bar>
+            \ silent! call repeat#set("\<Leader>\<Leader>e")<CR>
+    nnoremap <buffer> <Leader><Leader>f
+            \ :call ChangeRebaseAction('fixup') <bar>
+            \ silent! call repeat#set("\<Leader>\<Leader>f")<CR>
+    nnoremap <buffer> <Leader><Leader>p
+            \ :call ChangeRebaseAction('pick') <bar>
+            \ silent! call repeat#set("\<Leader>\<Leader>p")<CR>
+    nnoremap <buffer> <Leader><Leader>r
+            \ :call ChangeRebaseAction('reword') <bar>
+            \ silent! call repeat#set("\<Leader>\<Leader>r")<CR>
+    nnoremap <buffer> <Leader><Leader>s
+            \ :call ChangeRebaseAction('squash') <bar>
+            \ silent! call repeat#set("\<Leader>\<Leader>s")<CR>
 endfunction
 
 " Put these in an autocmd group, so that we can delete them easily.
@@ -4002,11 +6555,11 @@ augroup local_vimrc
     autocmd FileType svn SetupSvn | let b:startAtTop = 1
 
     " Start at top-of-file for Git-related files.
-    autocmd FileType gitcommit,gitrelated SetupGit | let b:startAtTop = 1
+    autocmd FileType gitcommit,gitrelated,gitrebase SetupGit |
+            \ let b:startAtTop = 1
 
     " When editing a file, jump to the last known cursor position.
     autocmd BufReadPost * call AutoRestoreLastCursorPosition()
-
 
     " Open a diff window for Git commits.
     autocmd FileType gitcommit call AutoOpenGitDiff()
@@ -4014,8 +6567,8 @@ augroup local_vimrc
     " Close diff window after a Git commit.
     autocmd BufUnload * call AutoCloseGitDiff()
 
-    " Use tabs for gitconfig files.
-    autocmd FileType gitconfig setlocal noexpandtab commentstring=#\ %s
+    " Add interactive rebase mappings when doing a `git rebase`.
+    autocmd FileType gitrebase call SetupRebaseMappings()
 
     " By default, when Vim switches buffers in a window, the new buffer's
     " cursor position is scrolled to the center (as if 'zz' had been
@@ -4023,6 +6576,9 @@ augroup local_vimrc
     autocmd BufLeave * call AutoSaveWinView()
     autocmd BufEnter * call AutoRestoreWinView()
 
+    " Set makeprg for *.snippet.py files.
+    autocmd BufRead,BufNewFile *.snippets.py
+            \ setlocal makeprg=make\ -s\ -C\ %:p:h
 augroup END
 
 " Support for gpg-encrypted files.
@@ -4042,22 +6598,22 @@ augroup local_encrypted
     autocmd BufReadPre,FileReadPre      *.gpg let &sh='sh'
     autocmd BufReadPre,FileReadPre      *.gpg let ch_save = &ch|set ch=2
     autocmd BufReadPost,FileReadPost    *.gpg '[,']!gpg --decrypt
-        \   --default-recipient-self 2> /dev/null
+            \   --default-recipient-self 2> /dev/null
     autocmd BufReadPost,FileReadPost    *.gpg let &sh=shsave
 
     " Switch to normal mode for editing
     autocmd BufReadPost,FileReadPost    *.gpg set nobin
     autocmd BufReadPost,FileReadPost    *.gpg let &ch = ch_save|
-        \   unlet ch_save
+            \   unlet ch_save
     autocmd BufReadPost,FileReadPost    *.gpg execute
-        \   ":doautocmd BufReadPost " . expand("%:r")
+            \   ":doautocmd BufReadPost " . expand("%:r")
 
     " Convert all text to encrypted text before writing
     autocmd BufWritePre,FileWritePre    *.gpg set bin
     autocmd BufWritePre,FileWritePre    *.gpg let shsave=&sh
     autocmd BufWritePre,FileWritePre    *.gpg let &sh='sh'
     autocmd BufWritePre,FileWritePre    *.gpg '[,']!gpg --encrypt
-        \   --default-recipient-self 2>/dev/null
+            \   --default-recipient-self 2>/dev/null
     autocmd BufWritePre,FileWritePre    *.gpg let &sh=shsave
 
     " Undo the encryption so we are back in the normal text, directly
@@ -4074,6 +6630,20 @@ augroup local_spell
     " First, remove all autocmds in this group.
     autocmd!
     autocmd FileType * call SetSpell()
+augroup END
+
+" Re-apply highlight groups on syntax change.
+" This should come after "syntax on" so it will be invoked after Vim-supplied
+" autocmds.
+augroup local_HighlightApply
+    " First, remove all autocmds in this group.
+    autocmd!
+
+    " Re-apply highlight groups defined via :Highlight command.
+    " Older Vim versions can clear the associated Highlight syntax groups,
+    " so this autocmd (which comes after "syntax on") will run afterward
+    " to apply those groups again.
+    autocmd Syntax * call HighlightApply()
 augroup END
 
 " =============================================================
@@ -4105,7 +6675,7 @@ endfunction
 if has('statusline') && version >= 700
     " Default status line:
     " set statusline=%<%f\ %h%m%r%=%-14.(%l,%c%V%)\ %P
-    set statusline =
+    set statusline=
     set statusline+=%#User1#                       " Highlighting
     set statusline+=%-3n\                          " Buffer number
 
@@ -4139,9 +6709,9 @@ if has('statusline') && version >= 700
     " Use different colors for statusline in current and non-current window.
     let g:Active_statusline=&g:statusline
     let g:NCstatusline=substitute(
-                \                substitute(g:Active_statusline,
-                \                'User1', 'User3', 'g'),
-                \                'User2', 'User4', 'g')
+            \                substitute(g:Active_statusline,
+            \                'User1', 'User3', 'g'),
+            \                'User2', 'User4', 'g')
     au! WinEnter * let&l:statusline = g:Active_statusline
     au! WinLeave * let&l:statusline = g:NCstatusline
 endif
@@ -4153,7 +6723,12 @@ endif
 set laststatus=2
 
 
-" If it exists, source the specified |VIMRC_AFTER| hook.
-if filereadable($VIMRC_AFTER)
-    source $VIMRC_AFTER
-endif
+" -------------------------------------------------------------
+" "vimrc-after" overrides
+" -------------------------------------------------------------
+
+" Execute in lowest-to-highest priority order, so that highest-priority
+" gets the last word.
+call Source('$VIMLOCALFILES/vimrc-after.vim')
+call Source('$VIMUSERFILES/vimrc-after.vim')
+call Source('$VIMUSERLOCALFILES/vimrc-after.vim')
