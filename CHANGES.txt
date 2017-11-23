@@ -7,6 +7,57 @@ Significant changes to vimfiles (newest changes first).
 Changes marked with "BREAKING CHANGE" indicate an incompatible change that may
 require adjustment of per-user settings.
 
+2017-11-12
+==========
+
+- Update tagbar plugin to version 2017-10-18.
+
+2017-11-11
+==========
+
+- Fix ``~/.vim/buildtool`` syntax for detecting GNU tar.
+
+2017-10-24
+==========
+
+- Change ``<F12>`` mapping to use ``:silent! wall`` so that it works even when
+  unnamed (and thus unwritable) buffers are present.
+
+- Add some new 'C' snippets:
+
+    ``st`` --> ``size_t``
+    ``sst`` --> ``ssize_t``
+    ``un`` --> ``unsigned``
+
+2017-10-17
+==========
+
+- Pressing '*' on Vim versions prior to 7.4.243 could lead to the error 'E118:
+  Too many arguments for function: getreg' because support for using lists for
+  register values in getreg() and setreg() was not completed until 7.4.243.  As
+  a work-around, the string-flavored getreg() and setreg() are now used on these
+  older versions of Vim.
+
+2017-09-27
+==========
+
+- Customize the highlighting for CursorLineNr in the szakdark color scheme
+  (thanks to John Szakmeister).
+
+2017-09-26
+==========
+
+- Upgrade vim-togglecursor to version 0.5.2, which avoids some extra work when
+  Vim supports the t_SR option (thanks to John Szakmeister).
+
+2017-09-26
+==========
+
+- Fix ~/.vim/buildtool to explicitly set file permissions in generated tarball,
+  for systems where umask is unsuitable (e.g., umask=007); also detect use of
+  GNU tar and avoid GNU-specific switches for non-GNU implementations such as
+  found on OS X (thanks to Dave Shepherd).
+
 2017-08-24
 ==========
 
